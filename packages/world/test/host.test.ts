@@ -1,6 +1,6 @@
-import { AwpClient, jsonPayload, AwpError } from "@hyperduality/awp";
+import { AwpClient, AwpError, jsonPayload } from "@hyperduality/awp";
 import { afterEach, describe, expect, it } from "vitest";
-import { serveWorld, type RunningWorld } from "../src/index.ts";
+import { type RunningWorld, serveWorld } from "../src/index.ts";
 import { gridworld } from "./gridworld.ts";
 
 const TOKEN = "test-token-0123456789";
@@ -34,7 +34,11 @@ describe("lockstep gridworld", () => {
     const w = await start("lockstep");
     const c = client(w.url);
     await c.initialize();
-    const ready = await c.openSession("lockstep", { embodiment: "avatar_0", subscribe: ["grid_view"], admin: ["tick"] });
+    const ready = await c.openSession("lockstep", {
+      embodiment: "avatar_0",
+      subscribe: ["grid_view"],
+      admin: ["tick"],
+    });
     expect(ready.granted.channels).toEqual([{ channel: "grid_view", rate_hz: null, channel_id: 1 }]);
     expect(ready.tick).toBe(0);
     const rec = await c.submit("walk_to", { cell: [2, 0] }, { preempt: "replace" });

@@ -112,7 +112,10 @@ export async function createInspectorServer(opts: InspectorServerOptions): Promi
       };
     },
 
-    stream<T>(name: string, o: { capacity?: number; key?: (item: T) => string; flushMs?: number } = {}): StreamTopic<T> {
+    stream<T>(
+      name: string,
+      o: { capacity?: number; key?: (item: T) => string; flushMs?: number } = {},
+    ): StreamTopic<T> {
       const capacity = o.capacity ?? 2000;
       let items: T[] = [];
       let pending: T[] = [];

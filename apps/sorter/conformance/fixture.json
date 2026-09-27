@@ -1,0 +1,18 @@
+{
+  "embodiment": "arm_0",
+  "subscribe": ["proprio", "scene"],
+  "moves": [
+    { "type": "move_to", "params": { "x_m": -0.6, "z_m": 0.3 } },
+    { "type": "move_to", "params": { "x_m": 0.6, "z_m": 0.35 } },
+    { "type": "move_to", "params": { "x_m": 0.0, "z_m": 0.9 } }
+  ],
+  "extended_min_ms": 1500,
+  "extended_min_ticks": 20,
+  "long_params": { "max_velocity_mps": 0.02 },
+  "instant": { "type": "stop", "params": {} },
+  "invalid": { "type": "move_to", "params": { "x_m": "left" } },
+  "outside_envelope": { "type": "move_to", "params": { "x_m": 0.99, "z_m": 0.06 } },
+  "initial_state": "default",
+  "operator": { "estop_engage": "kill -USR1 $WORLD_PID", "estop_release": "kill -USR2 $WORLD_PID" },
+  "audit_dir": "conformance/audit"
+}

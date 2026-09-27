@@ -8,3 +8,4 @@ dist
 awp-audit
 conformance/report
 *.tsbuildinfo
+conformance/audit

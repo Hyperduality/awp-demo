@@ -8,6 +8,7 @@ import {
   type ActionState,
   type AdminOperation,
   type ChannelDecl,
+  compileParamsSchema,
   ErrorCode,
   type ErrorName,
   isTerminal,
@@ -17,7 +18,6 @@ import {
   transition,
   validate,
   type WorldManifest,
-  compileParamsSchema,
 } from "@hyperduality/awp";
 import type { ActionRun, Sim, WorldDefinition } from "./types.ts";
 import { decodeB64Json, jsonEqual, jsonPayloadB64, mintToken, redact, sha256Hex, stats } from "./util.ts";
@@ -163,7 +163,13 @@ interface Session {
   suspendedAtNs: number | undefined;
   task: unknown;
   lastTelemetryNs: number;
-  telemetry: { obs: number[]; admission: number[]; o2a: number[]; command: number[]; perChannel: Map<number, number[]> };
+  telemetry: {
+    obs: number[];
+    admission: number[];
+    o2a: number[];
+    command: number[];
+    perChannel: Map<number, number[]>;
+  };
   auditHash: string;
   agent: unknown;
   openedAtWallMs: number;
@@ -220,7 +226,8 @@ export class WorldHost<View = unknown> {
       this.types.set(a.type, a);
       this.validators.set(a.type, compileParamsSchema(def.manifest, a));
     }
-    for (const c of [...def.manifest.observation_channels, ...(def.manifest.command_channels ?? [])]) this.channels.set(c.id, c);
+    for (const c of [...def.manifest.observation_channels, ...(def.manifest.command_channels ?? [])])
+      this.channels.set(c.id, c);
     this.initialState = def.manifest.initial_states?.[0] ?? "default";
     this.seed = def.defaultSeed ?? 1;
     this.sim = def.createSim({ seed: this.seed, initialState: this.initialState });
@@ -271,12 +278,20 @@ export class WorldHost<View = unknown> {
       this.sendRaw(c, {
         jsonrpc: "2.0",
         id: null,
-        error: { code: JsonRpcCode.INVALID_REQUEST, message: "Invalid Request", data: { detail: "batches are not used" } },
+        error: {
+          code: JsonRpcCode.INVALID_REQUEST,
+          message: "Invalid Request",
+          data: { detail: "batches are not used" },
+        },
       });
       return this.drain();
     }
     if (!msg || typeof msg !== "object" || (msg as Json).jsonrpc !== "2.0") {
-      this.sendRaw(c, { jsonrpc: "2.0", id: null, error: { code: JsonRpcCode.INVALID_REQUEST, message: "Invalid Request" } });
+      this.sendRaw(c, {
+        jsonrpc: "2.0",
+        id: null,
+        error: { code: JsonRpcCode.INVALID_REQUEST, message: "Invalid Request" },
+      });
       return this.drain();
     }
     const m = msg as Json;
@@ -287,7 +302,8 @@ export class WorldHost<View = unknown> {
     // The watchdog counts agent-originated messages only; responses to our pings do not reset it (AWP-SAF-003).
     if (method && s && s.conn === c) s.lastAgentNs = now;
     if (parsed.outOfRange.length > 0) {
-      if (method && hasId) this.error(c, m.id as Id, "AWP_INTEGER_RANGE", `integer beyond 2^53 − 1 at ${parsed.outOfRange[0]}`);
+      if (method && hasId)
+        this.error(c, m.id as Id, "AWP_INTEGER_RANGE", `integer beyond 2^53 − 1 at ${parsed.outOfRange[0]}`);
       if (s) this.beginClose(s, "protocol_error", undefined);
       this.out.push({ kind: "close", conn: c.id, code: 1002, reason: "AWP_INTEGER_RANGE" });
       return this.drain();
@@ -310,7 +326,11 @@ export class WorldHost<View = unknown> {
           error: {
             code: e.code,
             message: e.errorName,
-            data: { retryable: RETRYABLE.has(e.errorName) || e.extra.retryable === true, ...(e.detail ? { detail: e.detail } : {}), ...e.extra },
+            data: {
+              retryable: RETRYABLE.has(e.errorName) || e.extra.retryable === true,
+              ...(e.detail ? { detail: e.detail } : {}),
+              ...e.extra,
+            },
           },
         });
       } else throw e;
@@ -375,7 +395,8 @@ export class WorldHost<View = unknown> {
     this.now = now;
     if (!this.eStop) return this.drain();
     this.eStop = false;
-    for (const s of this.sessions.values()) for (const emb of s.embodiments) this.event(s, "e_stop_released", { embodiment: emb, source: "operator" });
+    for (const s of this.sessions.values())
+      for (const emb of s.embodiments) this.event(s, "e_stop_released", { embodiment: emb, source: "operator" });
     this.hooks.changed?.();
     return this.drain();
   }
@@ -522,7 +543,9 @@ export class WorldHost<View = unknown> {
     if (problems.length > 0) throw new AwpFailure(JsonRpcCode.INVALID_PARAMS, "Invalid params", problems.join("; "));
     const versions = p.protocol_versions as string[];
     if (!versions.includes(this.manifest.protocol_version)) {
-      fail("AWP_VERSION_UNSUPPORTED", `this world speaks ${this.manifest.protocol_version}`, { supported: [this.manifest.protocol_version] });
+      fail("AWP_VERSION_UNSUPPORTED", `this world speaks ${this.manifest.protocol_version}`, {
+        supported: [this.manifest.protocol_version],
+      });
     }
     c.initialized = true;
     c.consumes = new Set(p.consumes_modalities as string[]);
@@ -534,7 +557,8 @@ export class WorldHost<View = unknown> {
   private rpcOpen(c: Conn, p: Json): undefined {
     const problems = validate("session-open", p, "receiver");
     if (problems.length > 0) throw new AwpFailure(JsonRpcCode.INVALID_PARAMS, "Invalid params", problems.join("; "));
-    if (c.session && c.session.state !== "closed") fail("AWP_SESSION_EXISTS", "this connection already holds a session");
+    if (c.session && c.session.state !== "closed")
+      fail("AWP_SESSION_EXISTS", "this connection already holds a session");
     const mode = p.mode as TimeModel;
     if (mode !== this.mode) fail("AWP_TIME_MODEL_UNSUPPORTED", `this world runs ${this.mode}`);
     if (p.takeover) fail("AWP_EMBODIMENT_UNAVAILABLE", "transfer is not supported");
@@ -554,17 +578,20 @@ export class WorldHost<View = unknown> {
     for (const d of decls) {
       if (d.shared_control) continue;
       for (const other of this.sessions.values()) {
-        if (other.state !== "closed" && other.embodiments.includes(d.id)) fail("AWP_EMBODIMENT_UNAVAILABLE", `${d.id} is bound by another session`);
+        if (other.state !== "closed" && other.embodiments.includes(d.id))
+          fail("AWP_EMBODIMENT_UNAVAILABLE", `${d.id} is bound by another session`);
       }
     }
     // One controlling session at a time, so any_session tick authority needs no grant (AWP-TIM-012).
     if (decls.length > 0 && this.mode === "lockstep") {
       for (const other of this.sessions.values()) {
-        if (other.state !== "closed" && !other.observer) fail("AWP_EMBODIMENT_UNAVAILABLE", "another session controls this world");
+        if (other.state !== "closed" && !other.observer)
+          fail("AWP_EMBODIMENT_UNAVAILABLE", "another session controls this world");
       }
     }
     if (p.task !== undefined) {
-      if (this.manifest.capabilities?.task !== true) throw new AwpFailure(JsonRpcCode.INVALID_PARAMS, "Invalid params", "this world has no task capability");
+      if (this.manifest.capabilities?.task !== true)
+        throw new AwpFailure(JsonRpcCode.INVALID_PARAMS, "Invalid params", "this world has no task capability");
       this.checkTask(p.task);
     }
     const observer = decls.length === 0;
@@ -645,7 +672,11 @@ export class WorldHost<View = unknown> {
       reconnect_window_ms: Math.max(this.windowMs, this.watchdogMs ?? 0),
       heartbeat_interval_ms: this.heartbeatMs,
       granted: {
-        channels: [...s.grants.values()].map((g) => ({ channel: g.channel, rate_hz: g.rateHz, channel_id: g.channelId })),
+        channels: [...s.grants.values()].map((g) => ({
+          channel: g.channel,
+          rate_hz: g.rateHz,
+          channel_id: g.channelId,
+        })),
         action_types: s.grantedTypes,
         admin: s.admin,
         envelopes,
@@ -659,8 +690,15 @@ export class WorldHost<View = unknown> {
   }
 
   private adminAvailable(op: AdminOperation, observer: boolean): boolean {
-    if (op === "tick") return this.mode === "lockstep" && !observer && ![...this.sessions.values()].some((x) => x.admin.includes("tick"));
-    if (op === "reset") return (this.manifest.initial_states?.length ?? 0) > 0 && ![...this.sessions.values()].some((x) => x.admin.includes("reset"));
+    if (op === "tick")
+      return (
+        this.mode === "lockstep" && !observer && ![...this.sessions.values()].some((x) => x.admin.includes("tick"))
+      );
+    if (op === "reset")
+      return (
+        (this.manifest.initial_states?.length ?? 0) > 0 &&
+        ![...this.sessions.values()].some((x) => x.admin.includes("reset"))
+      );
     return false;
   }
 
@@ -670,7 +708,13 @@ export class WorldHost<View = unknown> {
     return this.manifest.embodiments.some((e) => s.embodiments.includes(e.id) && e.channels.includes(decl.id));
   }
 
-  private grantChannel(s: Session, c: Conn, decl: ChannelDecl, requestedHz: number | undefined, command: boolean): Grant {
+  private grantChannel(
+    s: Session,
+    c: Conn,
+    decl: ChannelDecl,
+    requestedHz: number | undefined,
+    command: boolean,
+  ): Grant {
     const existing = s.grants.get(decl.id);
     let rate: number | null = null;
     if (this.mode === "streaming") {
@@ -736,8 +780,10 @@ export class WorldHost<View = unknown> {
 
   private checkTask(task: unknown): void {
     const t = task as { content?: { type?: string }[] } | undefined;
-    if (!t || !Array.isArray(t.content) || t.content.length === 0) fail("AWP_PARAMS_INVALID", "a task has content blocks");
-    for (const b of t.content) if (b.type !== "text") fail("AWP_PARAMS_INVALID", `content block type ${b.type} is not supported`);
+    if (!t || !Array.isArray(t.content) || t.content.length === 0)
+      fail("AWP_PARAMS_INVALID", "a task has content blocks");
+    for (const b of t.content)
+      if (b.type !== "text") fail("AWP_PARAMS_INVALID", `content block type ${b.type} is not supported`);
   }
 
   // ---------------------------------------------------------------------------------------------
@@ -750,20 +796,27 @@ export class WorldHost<View = unknown> {
     for (const k of IDENTITY_FIELDS) if (Object.hasOwn(p, k)) submission[k] = p[k];
     const prior = s.actions.get(actionId);
     if (prior) {
-      if (!jsonEqual(prior.submission, submission)) fail("AWP_ACTION_ID_CONFLICT", `${actionId} was submitted with different content`);
+      if (!jsonEqual(prior.submission, submission))
+        fail("AWP_ACTION_ID_CONFLICT", `${actionId} was submitted with different content`);
       return this.submitResult(prior); // AWP-ACT-001
     }
     if (s.observer) fail("AWP_FORBIDDEN", "observer sessions cannot act");
     let embodiment: string;
     if (s.multi) {
-      if (typeof p.embodiment_id !== "string") throw new AwpFailure(JsonRpcCode.INVALID_PARAMS, "Invalid params", "embodiment_id is required in a multi-bind session");
+      if (typeof p.embodiment_id !== "string")
+        throw new AwpFailure(
+          JsonRpcCode.INVALID_PARAMS,
+          "Invalid params",
+          "embodiment_id is required in a multi-bind session",
+        );
       embodiment = p.embodiment_id;
     } else embodiment = (p.embodiment_id as string | undefined) ?? s.embodiments[0]!;
     if (!s.embodiments.includes(embodiment)) fail("AWP_FORBIDDEN", `${embodiment} is not bound to this session`);
     const type = p.type as string;
     const schema = this.types.get(type);
     const emb = this.manifest.embodiments.find((e) => e.id === embodiment)!;
-    if (!schema || !s.grantedTypes.includes(type) || !emb.action_types.includes(type)) fail("AWP_FORBIDDEN", `${type} is not granted for ${embodiment}`);
+    if (!schema || !s.grantedTypes.includes(type) || !emb.action_types.includes(type))
+      fail("AWP_FORBIDDEN", `${type} is not granted for ${embodiment}`);
     if (this.eStop) fail("AWP_ESTOP_ACTIVE", "the e-stop is engaged");
     const params = (p.params ?? {}) as Json;
     const check = this.validators.get(type)!;
@@ -782,7 +835,8 @@ export class WorldHost<View = unknown> {
     if (preempt === "reject" && live.length > 0) fail("AWP_BUSY", `${group} is busy`, { retry_after_ms: 100 });
     if (preempt === "queue" && live.length > 0) {
       const queued = live.filter((a) => a.state === "queued").length;
-      if (queued >= (schema.max_queue ?? 1)) fail("AWP_QUEUE_FULL", `the queue of ${group} is full`, { retry_after_ms: 100 });
+      if (queued >= (schema.max_queue ?? 1))
+        fail("AWP_QUEUE_FULL", `the queue of ${group} is full`, { retry_after_ms: 100 });
       initial = "queued";
     }
     if (typeof p.basis_ts_mono_ns === "number") s.telemetry.o2a.push(Math.max(0, receivedTs - p.basis_ts_mono_ns));
@@ -846,7 +900,9 @@ export class WorldHost<View = unknown> {
       status_seq: a.lastSeq,
       received_ts_mono_ns: a.receivedTs,
       ts_mono_ns: a.lastTs,
-      ...(a.lastReason && (a.state === "rejected" || a.state === "failed" || a.state === "cancelled") ? { reason: a.lastReason } : {}),
+      ...(a.lastReason && (a.state === "rejected" || a.state === "failed" || a.state === "cancelled")
+        ? { reason: a.lastReason }
+        : {}),
     };
   }
 
@@ -854,7 +910,12 @@ export class WorldHost<View = unknown> {
     const a = s.actions.get(p.action_id as string);
     if (!a) fail("AWP_ACTION_UNKNOWN", `no action ${p.action_id}`);
     if (isTerminal(a.state) || a.state === "cancelling") {
-      return { action_id: a.id, state: a.state, status_seq: a.lastSeq, ...(a.lastReason ? { reason: a.lastReason } : {}) };
+      return {
+        action_id: a.id,
+        state: a.state,
+        status_seq: a.lastSeq,
+        ...(a.lastReason ? { reason: a.lastReason } : {}),
+      };
     }
     if (a.state === "executing") {
       this.transitionQuiet(s, a, "cancelling", { reason: "cancelled_by_agent" });
@@ -911,12 +972,17 @@ export class WorldHost<View = unknown> {
   private startStaged(s: Session): void {
     for (const a of this.liveActions(s)) {
       if (a.state === "cancelling" && a.abortDoneNs === -1) {
-        this.finish(s, a, "cancelled", { reason: a.abortReason ?? "cancelled_by_agent", aborted_at_progress: round3(a.progress) });
+        this.finish(s, a, "cancelled", {
+          reason: a.abortReason ?? "cancelled_by_agent",
+          aborted_at_progress: round3(a.progress),
+        });
       }
     }
     const staged = [...s.actions.values()].filter((a) => a.state === "accepted").sort((x, y) => x.order - y.order);
     for (const a of staged) {
-      const running = this.liveActions(s).find((o) => o.group === a.group && (o.state === "executing" || o.state === "cancelling"));
+      const running = this.liveActions(s).find(
+        (o) => o.group === a.group && (o.state === "executing" || o.state === "cancelling"),
+      );
       if (running) {
         if (!a.replaces || running.state === "cancelling") continue;
         this.preempt(s, running);
@@ -974,7 +1040,10 @@ export class WorldHost<View = unknown> {
     const now = this.clock(s);
     for (const a of this.liveActions(s)) {
       if (a.state === "cancelling" && a.abortDoneNs !== undefined && now >= a.abortDoneNs) {
-        this.finish(s, a, "cancelled", { reason: a.abortReason ?? "cancelled_by_agent", aborted_at_progress: a.progress });
+        this.finish(s, a, "cancelled", {
+          reason: a.abortReason ?? "cancelled_by_agent",
+          aborted_at_progress: a.progress,
+        });
         continue;
       }
       if (a.deadlineNs !== undefined && now > a.deadlineNs) {
@@ -1022,7 +1091,12 @@ export class WorldHost<View = unknown> {
       }
     }
     // Watchdog (AWP-SAF-003/004): runs whether or not the session is connected.
-    if (this.watchdogMs !== undefined && !s.observer && !s.inSafeState && this.now - s.lastAgentNs > this.watchdogMs * 1e6) {
+    if (
+      this.watchdogMs !== undefined &&
+      !s.observer &&
+      !s.inSafeState &&
+      this.now - s.lastAgentNs > this.watchdogMs * 1e6
+    ) {
       this.enterSafeState(s);
     }
     if (s.conn && this.now - s.lastTelemetryNs >= 1e9) this.telemetry(s);
@@ -1054,7 +1128,8 @@ export class WorldHost<View = unknown> {
     s.inSafeState = true;
     for (const emb of s.embodiments) this.sim.safeStop(emb);
     for (const a of this.liveActions(s)) {
-      if (a.state === "executing" || a.state === "cancelling") this.finish(s, a, "failed", { reason: "connection_lost" });
+      if (a.state === "executing" || a.state === "cancelling")
+        this.finish(s, a, "failed", { reason: "connection_lost" });
       else this.finish(s, a, "cancelled", { reason: "safe_state" });
     }
     const behavior = this.manifest.safety_policy.safe_state?.behavior ?? "hold";
@@ -1093,7 +1168,12 @@ export class WorldHost<View = unknown> {
       a.clamped = true;
     }
     if (typeof p.ts_mono_ns === "number") s.telemetry.command.push(Math.max(0, this.clock(s) - p.ts_mono_ns));
-    this.audit(s, "in", "frame", { channel_id: p.channel_id, seq, ts_mono_ns: p.ts_mono_ns, payload_sha256: sha256Hex(String(p.payload_b64)) });
+    this.audit(s, "in", "frame", {
+      channel_id: p.channel_id,
+      seq,
+      ts_mono_ns: p.ts_mono_ns,
+      payload_sha256: sha256Hex(String(p.payload_b64)),
+    });
   }
 
   private streamStats(a: Action) {
@@ -1108,7 +1188,8 @@ export class WorldHost<View = unknown> {
     const run = this.sim.start(a.embodiment, a.type, a.params, { actionId: a.id, sessionId: s.id });
     a.run = run;
     a.lastProgressNs = this.clock(s);
-    if (a.schema.duration === "streaming") a.stream = { frames_applied: 0, last_seq: 0, clamped_count: 0, lastFrameNs: this.clock(s) };
+    if (a.schema.duration === "streaming")
+      a.stream = { frames_applied: 0, last_seq: 0, clamped_count: 0, lastFrameNs: this.clock(s) };
     const extra: Json = a.schema.duration === "extended" && this.mode === "streaming" ? { progress: 0 } : {};
     if (this.mode === "lockstep") {
       // One status per advance: the start carries the advance's progress (AWP-LIF-003).
@@ -1228,7 +1309,8 @@ export class WorldHost<View = unknown> {
     const p: Json = { action_id: a.id, state: a.state, status_seq: 0, ts_mono_ns: a.lastTs };
     if (this.mode === "lockstep") p.tick = this.tick;
     for (const [k, v] of Object.entries(extra)) if (v !== undefined) p[k] = v;
-    if (a.state === "executing" && a.schema.duration === "streaming" && a.stream && p.stream === undefined) p.stream = this.streamStats(a);
+    if (a.state === "executing" && a.schema.duration === "streaming" && a.stream && p.stream === undefined)
+      p.stream = this.streamStats(a);
     return p;
   }
 
@@ -1248,8 +1330,10 @@ export class WorldHost<View = unknown> {
   private rpcReset(s: Session, p: Json): Json {
     if (!s.admin.includes("reset")) fail("AWP_FORBIDDEN", "reset is not granted");
     const initial = p.initial_state as string | undefined;
-    if (initial !== undefined && !(this.manifest.initial_states ?? []).includes(initial)) fail("AWP_PARAMS_INVALID", `no initial state ${initial}`);
-    if (p.seed !== undefined && this.manifest.capabilities?.seed !== true) fail("AWP_PARAMS_INVALID", "this world takes no seed");
+    if (initial !== undefined && !(this.manifest.initial_states ?? []).includes(initial))
+      fail("AWP_PARAMS_INVALID", `no initial state ${initial}`);
+    if (p.seed !== undefined && this.manifest.capabilities?.seed !== true)
+      fail("AWP_PARAMS_INVALID", "this world takes no seed");
     this.resetWorld(s.id, { initialState: initial, seed: p.seed as number | undefined });
     return this.mode === "lockstep" ? { tick: this.tick } : {};
   }
@@ -1280,9 +1364,11 @@ export class WorldHost<View = unknown> {
     const s = this.byToken.get(p.session_token as string);
     if (!s || s.state === "closed") fail("AWP_SESSION_UNKNOWN", "this world holds no such session");
     if (s.closing) fail("AWP_SESSION_EXPIRED", "the session is closing");
-    if (c.session && c.session !== s && c.session.state !== "closed") fail("AWP_SESSION_EXISTS", "this connection already holds a session");
+    if (c.session && c.session !== s && c.session.state !== "closed")
+      fail("AWP_SESSION_EXISTS", "this connection already holds a session");
     const last = p.last_status_seq as number;
-    if (last > s.statusSeq) throw new AwpFailure(JsonRpcCode.INVALID_PARAMS, "Invalid params", "last_status_seq is ahead of the session");
+    if (last > s.statusSeq)
+      throw new AwpFailure(JsonRpcCode.INVALID_PARAMS, "Invalid params", "last_status_seq is ahead of the session");
     if (s.conn && s.conn !== c) {
       const old = s.conn;
       old.session = undefined;
@@ -1323,7 +1409,8 @@ export class WorldHost<View = unknown> {
         this.startAbort(s, a, "session_closed");
       } else if (a.state === "cancelling") {
         // Close outranks the agent's own cancel while its abort runs (AWP-LIF-008).
-        if (precedence("session_closed") < precedence(a.abortReason ?? "cancelled_by_agent")) a.abortReason = "session_closed";
+        if (precedence("session_closed") < precedence(a.abortReason ?? "cancelled_by_agent"))
+          a.abortReason = "session_closed";
       } else this.finish(s, a, "cancelled", { reason: "session_closed" });
     }
     this.maybeClosed(s);
@@ -1432,12 +1519,23 @@ export class WorldHost<View = unknown> {
     if (this.mode === "lockstep") params.tick = this.tick;
     const message = { jsonrpc: "2.0", method: "obs.frame", params };
     if (this.validateOut) this.check("frame-inline", params, message);
-    this.audit(s, "out", "frame", { channel_id: g.channelId, seq: g.seq, ts_mono_ns: params.ts_mono_ns, tick: params.tick, payload_sha256: sha256Hex(params.payload_b64 as string) });
+    this.audit(s, "out", "frame", {
+      channel_id: g.channelId,
+      seq: g.seq,
+      ts_mono_ns: params.ts_mono_ns,
+      tick: params.tick,
+      payload_sha256: sha256Hex(params.payload_b64 as string),
+    });
     this.out.push({
       kind: "send",
       conn: s.conn.id,
       message,
-      frame: { session: s.id, key: `${s.id}:${g.channelId}`, latestWins: streaming && g.decl.loss_class === "latest-wins", streaming },
+      frame: {
+        session: s.id,
+        key: `${s.id}:${g.channelId}`,
+        latestWins: streaming && g.decl.loss_class === "latest-wins",
+        streaming,
+      },
     });
     if (streaming) this.activate(s);
   }
@@ -1474,7 +1572,11 @@ export class WorldHost<View = unknown> {
   }
 
   private error(c: Conn, id: Id, name: ErrorName, detail: string): void {
-    this.sendRaw(c, { jsonrpc: "2.0", id, error: { code: ErrorCode[name], message: name, data: { retryable: false, detail } } });
+    this.sendRaw(c, {
+      jsonrpc: "2.0",
+      id,
+      error: { code: ErrorCode[name], message: name, data: { retryable: false, detail } },
+    });
   }
 
   private sendRaw(c: Conn, message: Json): void {
@@ -1521,7 +1623,15 @@ export class WorldHost<View = unknown> {
 }
 
 /** Terminating causes, strongest first (AWP-LIF-008). */
-const PRECEDENCE = ["e_stop", "safe_state", "connection_lost", "world_reset", "session_closed", "transferred", "cancelled_by_agent"];
+const PRECEDENCE = [
+  "e_stop",
+  "safe_state",
+  "connection_lost",
+  "world_reset",
+  "session_closed",
+  "transferred",
+  "cancelled_by_agent",
+];
 
 function precedence(reason: string): number {
   const i = PRECEDENCE.indexOf(reason);
@@ -1536,7 +1646,15 @@ function round3(v: number): number {
   return Math.round(v * 1000) / 1000;
 }
 
-const IDENTITY_FIELDS = ["type", "params", "embodiment_id", "preempt", "deadline_ms", "basis_ts_mono_ns", "valid_until_ns"];
+const IDENTITY_FIELDS = [
+  "type",
+  "params",
+  "embodiment_id",
+  "preempt",
+  "deadline_ms",
+  "basis_ts_mono_ns",
+  "valid_until_ns",
+];
 
 const KNOWN_METHODS = new Set([
   "world.manifest",

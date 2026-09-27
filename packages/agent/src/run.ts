@@ -33,14 +33,18 @@ const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 export async function runAgent(opts: AgentOptions): Promise<RunningAgent> {
   const log = opts.log ?? ((l: string) => console.log(`[agent] ${l}`));
-  const inspector = opts.inspectorPort !== undefined ? await createInspectorServer({ port: opts.inspectorPort, process: "agent" }) : undefined;
+  const inspector =
+    opts.inspectorPort !== undefined
+      ? await createInspectorServer({ port: opts.inspectorPort, process: "agent" })
+      : undefined;
   const activity = inspector?.stream<ActivityEntry>(AgentTopic.activity, { capacity: 2000, key: (e) => e.id });
   const controllersTopic = inspector?.state<ControllerState[]>(AgentTopic.controllers, [], { throttleMs: 50 });
+  let mux: ControlMux | undefined;
   let connection: AgentStatus["connection"] = "connecting";
   let error: string | undefined;
   const statusTopic = inspector?.state<AgentStatus>(AgentTopic.status, snapshot(), { throttleMs: 100 });
 
-  const mux: ControlMux = new ControlMux(
+  mux = new ControlMux(
     opts.controllers,
     {
       activity: (e) => activity?.upsert(e),
@@ -73,18 +77,19 @@ export async function runAgent(opts: AgentOptions): Promise<RunningAgent> {
     statusTopic?.set(snapshot());
   };
 
+  const m = mux;
   if (inspector) {
     const arg = (a: unknown) => (a ?? {}) as Record<string, unknown>;
-    inspector.handle(AgentCommand.enable, (a) => mux.enable(String(arg(a).id), Boolean(arg(a).enabled)));
-    inspector.handle(AgentCommand.configure, (a) => mux.configure(String(arg(a).id), arg(arg(a).config)));
-    inspector.handle(AgentCommand.take, (a) => mux.take(String(arg(a).id)));
-    inspector.handle(AgentCommand.release, (a) => mux.release(String(arg(a).id)));
-    inspector.handle(AgentCommand.input, (a) => mux.input(String(arg(a).id), arg(a).input));
-    inspector.handle(AgentCommand.message, (a) => mux.message(String(arg(a).id), String(arg(a).text)));
-    inspector.handle(AgentCommand.stop, (a) => mux.interrupt(String(arg(a).id)));
-    inspector.handle(AgentCommand.clockPause, (a) => mux.setPaused(Boolean(arg(a).paused)));
-    inspector.handle(AgentCommand.clockStep, () => mux.step());
-    inspector.handle(AgentCommand.clockRate, (a) => mux.setRate(Number(arg(a).hz)));
+    inspector.handle(AgentCommand.enable, (a) => m.enable(String(arg(a).id), Boolean(arg(a).enabled)));
+    inspector.handle(AgentCommand.configure, (a) => m.configure(String(arg(a).id), arg(arg(a).config)));
+    inspector.handle(AgentCommand.take, (a) => m.take(String(arg(a).id)));
+    inspector.handle(AgentCommand.release, (a) => m.release(String(arg(a).id)));
+    inspector.handle(AgentCommand.input, (a) => m.input(String(arg(a).id), arg(a).input));
+    inspector.handle(AgentCommand.message, (a) => m.message(String(arg(a).id), String(arg(a).text)));
+    inspector.handle(AgentCommand.stop, (a) => m.interrupt(String(arg(a).id)));
+    inspector.handle(AgentCommand.clockPause, (a) => m.setPaused(Boolean(arg(a).paused)));
+    inspector.handle(AgentCommand.clockStep, () => m.step());
+    inspector.handle(AgentCommand.clockRate, (a) => m.setRate(Number(arg(a).hz)));
     inspector.handle(AgentCommand.reconnect, () => current?.dropConnection?.());
   }
 
@@ -122,21 +127,33 @@ export async function runAgent(opts: AgentOptions): Promise<RunningAgent> {
       setConnection("connected");
       client.on("suspended", () => setConnection("suspended"));
       client.on("resumed", () => setConnection("connected"));
-      mux.attach(client);
+      m.attach(client);
       await client.whenClosed();
-      mux.detach();
+      m.detach();
       setConnection("closed", client.closeReason);
       if (!stopped) await sleep(1000);
     }
   };
   void loop();
 
+  // Close the session on shutdown so the embodiments are released at once, rather than held for
+  // the reconnect window (AWP-SES-006); a restart under `tsx watch` then binds them again.
+  const shutdown = async () => {
+    stopped = true;
+    const timer = setTimeout(() => process.exit(0), 3000);
+    await current?.close().catch(() => undefined);
+    clearTimeout(timer);
+    process.exit(0);
+  };
+  process.once("SIGINT", shutdown);
+  process.once("SIGTERM", shutdown);
+
   return {
-    mux,
+    mux: m,
     async stop() {
       stopped = true;
       clearInterval(statusTimer);
-      mux.detach();
+      m.detach();
       await current?.close().catch(() => undefined);
       await inspector?.close();
     },

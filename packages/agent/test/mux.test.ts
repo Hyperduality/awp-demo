@@ -1,5 +1,5 @@
 import type { ActivityEntry } from "@awp-demo/inspector";
-import { serveWorld, type RunningWorld } from "@awp-demo/world";
+import { type RunningWorld, serveWorld } from "@awp-demo/world";
 import { AwpClient } from "@hyperduality/awp";
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -30,7 +30,11 @@ async function setup(mode: "lockstep" | "streaming", controllers: Controller<any
   await client.initialize();
   await client.openSession(mode, { embodiment: "avatar_0", subscribe: ["grid_view"] });
   const activity: ActivityEntry[] = [];
-  mux = new ControlMux(controllers, { activity: (e) => activity.push(e), controllers: () => {}, changed: () => {} }, { rateHz: 0 });
+  mux = new ControlMux(
+    controllers,
+    { activity: (e) => activity.push(e), controllers: () => {}, changed: () => {} },
+    { rateHz: 0 },
+  );
   mux.attach(client);
   return { activity, mux, client, world };
 }
@@ -133,7 +137,7 @@ describe("control mux", () => {
     const rec = await ctxRef!.submit("walk_to", { cell: [3, 0] });
     await ctxRef!.settle(rec);
     expect(rec.state).toBe("completed");
-    expect(client.tick).toBeGreaterThan(t0);
+    expect(client.tick).toBeGreaterThan(t0!);
     const after = client.tick;
     await new Promise((r) => setTimeout(r, 150));
     expect(client.tick).toBe(after);

@@ -63,7 +63,9 @@ export class InspectorClient {
     const id = this.nextId++;
     const m: ClientMessage = { t: "cmd", id, name, args };
     ws.send(JSON.stringify(m));
-    return new Promise<T>((resolve, reject) => this.pending.set(id, { resolve: resolve as (v: unknown) => void, reject }));
+    return new Promise<T>((resolve, reject) =>
+      this.pending.set(id, { resolve: resolve as (v: unknown) => void, reject }),
+    );
   }
 
   close(): void {
@@ -166,6 +168,9 @@ export class InspectorClient {
       this.dirty.clear();
       for (const t of topics) for (const fn of this.listeners.get(t) ?? []) fn();
     };
-    this.frame = typeof requestAnimationFrame === "function" ? requestAnimationFrame(run) : (setTimeout(run, 16) as unknown as number);
+    this.frame =
+      typeof requestAnimationFrame === "function"
+        ? requestAnimationFrame(run)
+        : (setTimeout(run, 16) as unknown as number);
   }
 }

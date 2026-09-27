@@ -5,13 +5,13 @@
 import { appendFileSync, mkdirSync } from "node:fs";
 import type { IncomingMessage } from "node:http";
 import { join } from "node:path";
+import { type WireEntry, WorldCommand, type WorldState, WorldTopic } from "@awp-demo/inspector";
 import {
   createInspectorServer,
   type InspectorServer,
   type StateTopic,
   type StreamTopic,
 } from "@awp-demo/inspector/server";
-import { WorldCommand, type WireEntry, type WorldState, WorldTopic } from "@awp-demo/inspector";
 import { AWP_SUBPROTOCOL } from "@hyperduality/awp";
 import { type WebSocket, WebSocketServer } from "ws";
 import { type HostOutput, WorldHost } from "./host.ts";
@@ -47,7 +47,10 @@ const HIGH_WATER = 256 * 1024;
 
 export async function serveWorld<View>(def: WorldDefinition<View>, opts: ServeOptions): Promise<RunningWorld<View>> {
   const log = opts.log ?? ((l: string) => console.log(`[world] ${l}`));
-  const inspector = opts.inspectorPort !== undefined ? await createInspectorServer({ port: opts.inspectorPort, process: "world" }) : undefined;
+  const inspector =
+    opts.inspectorPort !== undefined
+      ? await createInspectorServer({ port: opts.inspectorPort, process: "world" })
+      : undefined;
   const wire: StreamTopic<WireEntry> | undefined = inspector?.stream<WireEntry>(WorldTopic.wire, { capacity: 5000 });
   let worldState: StateTopic<WorldState> | undefined;
   let wireN = 0;
@@ -58,7 +61,8 @@ export async function serveWorld<View>(def: WorldDefinition<View>, opts: ServeOp
   const host = new WorldHost(def, {
     hooks: {
       audit: opts.auditDir
-        ? (session, record) => appendFileSync(join(opts.auditDir!, `${run}-${session}.jsonl`), `${JSON.stringify(record)}\n`)
+        ? (session, record) =>
+            appendFileSync(join(opts.auditDir!, `${run}-${session}.jsonl`), `${JSON.stringify(record)}\n`)
         : undefined,
       changed: () => publishWorld(),
       invalid: (schema, problems) => log(`outgoing ${schema} failed its sender form: ${problems.join("; ")}`),
@@ -92,7 +96,15 @@ export async function serveWorld<View>(def: WorldDefinition<View>, opts: ServeOp
   const tap = (conn: number, from: "agent" | "world", message: unknown, bytes: number) => {
     if (!wire) return;
     const session = host.sessionOf(conn);
-    wire.push({ n: ++wireN, ts: Date.now(), conn, ...(session ? { session } : {}), from, message: redact(message), bytes });
+    wire.push({
+      n: ++wireN,
+      ts: Date.now(),
+      conn,
+      ...(session ? { session } : {}),
+      from,
+      message: redact(message),
+      bytes,
+    });
   };
 
   const write = (ws: WebSocket, conn: number, o: HostOutput & { kind: "send" }) => {
@@ -112,7 +124,10 @@ export async function serveWorld<View>(def: WorldDefinition<View>, opts: ServeOp
       }
       if (o.frame?.latestWins && ws.bufferedAmount > HIGH_WATER) {
         let h = held.get(o.conn);
-        if (!h) held.set(o.conn, (h = new Map()));
+        if (!h) {
+          h = new Map();
+          held.set(o.conn, h);
+        }
         h.set(o.frame.key, o);
         continue;
       }
@@ -212,7 +227,8 @@ export async function serveWorld<View>(def: WorldDefinition<View>, opts: ServeOp
 function authenticate(req: IncomingMessage, opts: ServeOptions): true | { status: number; message: string } {
   const url = req.url ?? "/";
   // Credentials never travel in URLs (AWP-SEC-006).
-  if (/[?&](token|access_token|auth)=/i.test(url)) return { status: 400, message: "credentials must not appear in the URL" };
+  if (/[?&](token|access_token|auth)=/i.test(url))
+    return { status: 400, message: "credentials must not appear in the URL" };
   if (opts.allowAnonymous || !opts.token) return true;
   const header = req.headers.authorization;
   if (header === `Bearer ${opts.token}`) return true;

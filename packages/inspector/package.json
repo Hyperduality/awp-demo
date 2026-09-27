@@ -21,7 +21,9 @@
     "react": "^19"
   },
   "peerDependenciesMeta": {
-    "react": { "optional": true }
+    "react": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@awp-demo/tsconfig": "workspace:*",

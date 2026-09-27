@@ -19,7 +19,10 @@ export function gridworld(mode: "lockstep" | "streaming"): WorldDefinition<{ ava
         loss_class: "reliable",
         schema: {
           type: "object",
-          properties: { avatar: { type: "array", items: { type: "integer" } }, goal: { type: "array", items: { type: "integer" } } },
+          properties: {
+            avatar: { type: "array", items: { type: "integer" } },
+            goal: { type: "array", items: { type: "integer" } },
+          },
           required: ["avatar", "goal"],
         },
       },

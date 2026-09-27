@@ -7,7 +7,14 @@
  * authority wants time to flow, and never while an `on-wait` controller is thinking.
  */
 import { type ActivityEntry, type ControllerState, REDACTED } from "@awp-demo/inspector";
-import { type ActionRecord, type AwpClient, AwpError, isTerminal, jsonPayload, type WorldManifest } from "@hyperduality/awp";
+import {
+  type ActionRecord,
+  type AwpClient,
+  AwpError,
+  isTerminal,
+  jsonPayload,
+  type WorldManifest,
+} from "@hyperduality/awp";
 import { z } from "zod";
 import {
   type ControlContext,
@@ -83,7 +90,11 @@ export class ControlMux {
       const schema = z.toJSONSchema(def.config, { io: "input", unrepresentable: "any" }) as {
         properties?: Record<string, { "x-secret"?: boolean }>;
       };
-      const secrets = new Set(Object.entries(schema.properties ?? {}).filter(([, v]) => v["x-secret"]).map(([k]) => k));
+      const secrets = new Set(
+        Object.entries(schema.properties ?? {})
+          .filter(([, v]) => v["x-secret"])
+          .map(([k]) => k),
+      );
       this.slots.set(def.id, {
         def,
         priority: def.priority ?? DEFAULT_PRIORITY[def.kind],
@@ -118,7 +129,8 @@ export class ControlMux {
       }
       this.latestPayload.set(name, payload);
       if (client.mode === "lockstep" && typeof frame.ts_mono_ns === "number") {
-        if (this.lastTickTs !== undefined && frame.ts_mono_ns > this.lastTickTs) this.tickNs = frame.ts_mono_ns - this.lastTickTs;
+        if (this.lastTickTs !== undefined && frame.ts_mono_ns > this.lastTickTs)
+          this.tickNs = frame.ts_mono_ns - this.lastTickTs;
         this.lastTickTs = Math.max(this.lastTickTs ?? 0, frame.ts_mono_ns);
       }
       for (const fn of this.frameListeners.get(name) ?? []) fn(payload);
@@ -347,7 +359,10 @@ export class ControlMux {
       latest: <T>(channel: string) => mux.latestPayload.get(channel) as T | undefined,
       onFrame: <T>(channel: string, fn: (p: T) => void) => {
         let set = mux.frameListeners.get(channel);
-        if (!set) mux.frameListeners.set(channel, (set = new Set()));
+        if (!set) {
+          set = new Set();
+          mux.frameListeners.set(channel, set);
+        }
         const f = fn as (p: unknown) => void;
         set.add(f);
         const off = () => set.delete(f);
@@ -408,7 +423,16 @@ export class ControlMux {
     const actionId = `${slot.def.id}-${this.runId}-${++this.actionCounter}`;
     const entryId = `act:${actionId}`;
     const detail = summarize(params);
-    this.emit({ id: entryId, source: slot.def.id, kind: "action", title: type, detail, actionId, state: "submitted", data: { params } });
+    this.emit({
+      id: entryId,
+      source: slot.def.id,
+      kind: "action",
+      title: type,
+      detail,
+      actionId,
+      state: "submitted",
+      data: { params },
+    });
     try {
       const rec = await client.submit(type, params, {
         actionId,
@@ -422,7 +446,16 @@ export class ControlMux {
     } catch (e) {
       const reason = e instanceof AwpError ? e.errorName : e instanceof Error ? e.message : String(e);
       const why = e instanceof AwpError ? (e.detail ?? e.errorName) : reason;
-      this.emit({ id: entryId, source: slot.def.id, kind: "action", title: type, detail, actionId, state: "rejected", data: { params, reason, error: why } });
+      this.emit({
+        id: entryId,
+        source: slot.def.id,
+        kind: "action",
+        title: type,
+        detail,
+        actionId,
+        state: "rejected",
+        data: { params, reason, error: why },
+      });
       this.remember({ actionId, source: slot.def.id, type, params, state: "rejected", reason: why, ts: Date.now() });
       throw e;
     }
@@ -442,7 +475,15 @@ export class ControlMux {
       data: { params: t.params, reason: rec.reason, progress: rec.progress },
     });
     if (isTerminal(rec.state)) {
-      this.remember({ actionId: rec.action_id, source: t.source, type: t.type, params: t.params, state: rec.state, reason: rec.reason, ts: Date.now() });
+      this.remember({
+        actionId: rec.action_id,
+        source: t.source,
+        type: t.type,
+        params: t.params,
+        state: rec.state,
+        reason: rec.reason,
+        ts: Date.now(),
+      });
       this.wake();
     }
   }
@@ -455,7 +496,11 @@ export class ControlMux {
   // ---------------------------------------------------------------------------------------------
   // Time
 
-  private async settle(rec: ActionRecord, signal: AbortSignal, opts: { maxTicks?: number; timeoutMs?: number } = {}): Promise<ActionRecord> {
+  private async settle(
+    rec: ActionRecord,
+    signal: AbortSignal,
+    opts: { maxTicks?: number; timeoutMs?: number } = {},
+  ): Promise<ActionRecord> {
     if (rec.terminal || rec.lost) return rec;
     const client = this.client;
     if (!client) return rec;
@@ -478,7 +523,10 @@ export class ControlMux {
           if (rec.terminal || rec.lost || ticks >= maxTicks || signal.aborted) done();
         };
         this.tickListeners.add(onTick);
-        void rec.settled().then(done);
+        // A lockstep advance delivers statuses before its frames (AWP-TIM-003), so an action is only
+        // settled for a controller once the advance that ended it is complete. An action ended outside
+        // an advance (an e-stop, a reset) settles shortly after without one.
+        void rec.settled().then(() => setTimeout(() => rec.terminal && done(), 250));
         signal.addEventListener("abort", done, { once: true });
       });
     } finally {
@@ -559,7 +607,12 @@ export class ControlMux {
           await client.advance(1);
         } catch (e) {
           if (this.client !== client) break;
-          this.emit({ source: "mux", kind: "error", title: "Advance failed", detail: e instanceof Error ? e.message : String(e) });
+          this.emit({
+            source: "mux",
+            kind: "error",
+            title: "Advance failed",
+            detail: e instanceof Error ? e.message : String(e),
+          });
           await sleep(500);
           continue;
         }

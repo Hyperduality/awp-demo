@@ -9,8 +9,8 @@ import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { LlmConfig } from "@awp-demo/inspector";
 import { AwpError, type WorldManifest } from "@hyperduality/awp";
 import {
-  isStepCount,
   hasToolCall,
+  isStepCount,
   jsonSchema,
   type LanguageModel,
   type ModelMessage,
@@ -39,14 +39,20 @@ export function createModel(config: LlmConfig): LanguageModel {
   const apiKey = config.apiKey || (envKey ? process.env[envKey] : undefined);
   switch (config.provider) {
     case "anthropic":
-      return createAnthropic({ ...(apiKey ? { apiKey } : {}), ...(config.baseUrl ? { baseURL: config.baseUrl } : {}) })(config.model);
+      return createAnthropic({ ...(apiKey ? { apiKey } : {}), ...(config.baseUrl ? { baseURL: config.baseUrl } : {}) })(
+        config.model,
+      );
     case "openai":
-      return createOpenAI({ ...(apiKey ? { apiKey } : {}), ...(config.baseUrl ? { baseURL: config.baseUrl } : {}) })(config.model);
+      return createOpenAI({ ...(apiKey ? { apiKey } : {}), ...(config.baseUrl ? { baseURL: config.baseUrl } : {}) })(
+        config.model,
+      );
     case "google":
       return createGoogleGenerativeAI({ ...(apiKey ? { apiKey } : {}) })(config.model);
     case "openai-compatible":
       if (!config.baseUrl) throw new Error("an OpenAI-compatible provider needs a base URL");
-      return createOpenAICompatible({ name: "compatible", baseURL: config.baseUrl, ...(apiKey ? { apiKey } : {}) })(config.model);
+      return createOpenAICompatible({ name: "compatible", baseURL: config.baseUrl, ...(apiKey ? { apiKey } : {}) })(
+        config.model,
+      );
   }
 }
 
@@ -165,6 +171,8 @@ export interface LlmControllerOptions<C extends LlmConfig> {
   /** Context-window management between steps. */
   prepareStep?: PrepareStepFunction<ToolSet>;
   stopWhen?: StopCondition<ToolSet>[];
+  /** Overrides model construction (tests, custom providers). */
+  model?: (config: C) => LanguageModel;
 }
 
 /** A tool the model calls when the task is done; ends the turn. */
@@ -200,7 +208,7 @@ export function createLlmController<C extends LlmConfig = LlmConfig>(opts: LlmCo
           return;
         }
         const config = ctx.config;
-        if (!hasCredentials(config)) {
+        if (!opts.model && !hasCredentials(config)) {
           ctx.log({ kind: "error", title: "No API key", detail: `Add a ${config.provider} key in the LLM settings.` });
           return;
         }
@@ -212,14 +220,17 @@ export function createLlmController<C extends LlmConfig = LlmConfig>(opts: LlmCo
           .filter((h) => h.source !== ctx.id)
           .map(describeHistory);
         seenHistory = ctx.history(100).length;
-        const content = others.length > 0 ? `${text}\n\nSince your last turn, other controllers acted:\n${others.map((o) => `- ${o}`).join("\n")}` : text;
+        const content =
+          others.length > 0
+            ? `${text}\n\nSince your last turn, other controllers acted:\n${others.map((o) => `- ${o}`).join("\n")}`
+            : text;
         messages.push({ role: "user", content });
         ctx.engage();
         ctx.status("Thinking");
         try {
           const tools: ToolSet = { ...opts.tools(ctx), finish: finishTool };
           const agent = new ToolLoopAgent({
-            model: createModel(config),
+            model: opts.model ? opts.model(config) : createModel(config),
             instructions: opts.instructions(ctx),
             tools,
             stopWhen: opts.stopWhen ?? [isStepCount(config.maxSteps), hasToolCall("finish")],
@@ -229,7 +240,8 @@ export function createLlmController<C extends LlmConfig = LlmConfig>(opts: LlmCo
           await streamToActivity(ctx, result.fullStream);
           messages.push(...(await result.responseMessages));
         } catch (e) {
-          if (!signal.aborted) ctx.log({ kind: "error", title: "Model call failed", detail: e instanceof Error ? e.message : String(e) });
+          if (!signal.aborted)
+            ctx.log({ kind: "error", title: "Model call failed", detail: e instanceof Error ? e.message : String(e) });
           else ctx.log({ kind: "system", title: "Stopped" });
           // Keep the transcript well-formed: drop a dangling user turn with no answer.
           if (messages.at(-1)?.role === "user") messages.pop();
@@ -305,18 +317,30 @@ export async function streamToActivity<C>(ctx: ControlContext<C>, stream: AsyncI
       case "tool-call": {
         const p = part as { toolName: string; input: unknown };
         if (p.toolName === "finish") {
-          ctx.log({ kind: "message", title: String((p.input as { summary?: string })?.summary ?? "Done."), data: { finish: true } });
+          ctx.log({
+            kind: "message",
+            title: String((p.input as { summary?: string })?.summary ?? "Done."),
+            data: { finish: true },
+          });
         }
         break;
       }
       case "tool-error": {
         const p = part as { toolName: string; error: unknown };
-        ctx.log({ kind: "error", title: `${p.toolName} failed`, detail: p.error instanceof Error ? p.error.message : String(p.error) });
+        ctx.log({
+          kind: "error",
+          title: `${p.toolName} failed`,
+          detail: p.error instanceof Error ? p.error.message : String(p.error),
+        });
         break;
       }
       case "error": {
         const p = part as { error: unknown };
-        ctx.log({ kind: "error", title: "Model error", detail: p.error instanceof Error ? p.error.message : String(p.error) });
+        ctx.log({
+          kind: "error",
+          title: "Model error",
+          detail: p.error instanceof Error ? p.error.message : String(p.error),
+        });
         break;
       }
     }

@@ -42,7 +42,8 @@ export function redact<T>(value: T): T {
   if (value && typeof value === "object") {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value)) {
-      out[k] = REDACT_KEYS.has(k) && typeof v === "string" ? `[redacted:sha256:${sha256Hex(v).slice(0, 8)}]` : redact(v);
+      out[k] =
+        REDACT_KEYS.has(k) && typeof v === "string" ? `[redacted:sha256:${sha256Hex(v).slice(0, 8)}]` : redact(v);
     }
     return out as T;
   }
