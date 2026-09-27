@@ -35,7 +35,7 @@ describe("maze", () => {
 
   it("walks with move and stops at walls", () => {
     const sim = new MazeSim(11, "default");
-    const run = sim.start("runner_0", "move", { distance_m: 40 }, { actionId: "a", sessionId: "s" });
+    const run = sim.start("runner_0", "move", { distance_m: 40 });
     let status: ReturnType<typeof run.update> = {};
     for (let i = 0; i < 600 && !("failed" in status) && !("done" in status); i++) {
       status = run.update(1000 / 60);
