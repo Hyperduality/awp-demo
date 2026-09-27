@@ -1,0 +1,16 @@
+{
+  "embodiment": "avatar_0",
+  "subscribe": ["grid_view"],
+  "moves": [
+    { "type": "walk_to", "params": { "cell": [40, 0] } },
+    { "type": "walk_to", "params": { "cell": [0, 40] } },
+    { "type": "walk_to", "params": { "cell": [-40, -40] } }
+  ],
+  "extended_min_ms": 1500,
+  "extended_min_ticks": 20,
+  "instant": { "type": "move", "params": { "direction": "north" } },
+  "invalid": { "type": "move", "params": { "direction": "up" } },
+  "initial_state": "default",
+  "operator": { "estop_engage": "kill -USR1 $WORLD_PID", "estop_release": "kill -USR2 $WORLD_PID" },
+  "audit_dir": "awp-audit"
+}

@@ -1,0 +1,4 @@
+{
+  "extends": "@awp-demo/tsconfig/node.json",
+  "include": ["src"]
+}

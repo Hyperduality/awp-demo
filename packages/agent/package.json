@@ -1,0 +1,32 @@
+{
+  "name": "@awp-demo/agent",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./llm": "./src/llm.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "^4.0.65",
+    "@ai-sdk/google": "^4.0.82",
+    "@ai-sdk/openai": "^4.0.78",
+    "@ai-sdk/openai-compatible": "^3.0.0",
+    "@awp-demo/inspector": "workspace:*",
+    "@hyperduality/awp": "0.1.0-alpha.4",
+    "ai": "^7.0.118",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@awp-demo/tsconfig": "workspace:*",
+    "@awp-demo/world": "workspace:*",
+    "@types/node": "^24.19.0",
+    "tsx": "^4.23.15",
+    "typescript": "~5.9.3",
+    "vitest": "^5.0.2"
+  }
+}

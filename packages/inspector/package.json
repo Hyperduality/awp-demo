@@ -1,0 +1,35 @@
+{
+  "name": "@awp-demo/inspector",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./server": "./src/server.ts",
+    "./client": "./src/client.ts",
+    "./react": "./src/react.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "ws": "^8.22.0",
+    "zod": "^4.6.5"
+  },
+  "peerDependencies": {
+    "react": "^19"
+  },
+  "peerDependenciesMeta": {
+    "react": { "optional": true }
+  },
+  "devDependencies": {
+    "@awp-demo/tsconfig": "workspace:*",
+    "@types/node": "^24.19.0",
+    "@types/react": "^19.2.0",
+    "@types/ws": "^8.18.1",
+    "react": "^19.2.0",
+    "typescript": "~5.9.3",
+    "vitest": "^5.0.2"
+  }
+}

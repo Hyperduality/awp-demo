@@ -1,0 +1,27 @@
+{
+  "name": "@awp-demo/world",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./testing": "./src/testing.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@awp-demo/inspector": "workspace:*",
+    "@hyperduality/awp": "0.1.0-alpha.4",
+    "ws": "^8.22.0"
+  },
+  "devDependencies": {
+    "@awp-demo/tsconfig": "workspace:*",
+    "@types/node": "^24.19.0",
+    "@types/ws": "^8.18.1",
+    "tsx": "^4.23.15",
+    "typescript": "~5.9.3",
+    "vitest": "^5.0.2"
+  }
+}
