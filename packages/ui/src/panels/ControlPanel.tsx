@@ -10,11 +10,11 @@ import {
 import { useTopic } from "@awp-demo/inspector/react";
 import { ArrowChevronRight, Pause, Play } from "@gravity-ui/icons";
 import { Button, ComboBox, Input, Label, ListBox, Select, Slider, Switch, TextField } from "@heroui/react";
-import { Segment } from "@heroui-pro/react";
 import { type ReactNode, useEffect, useState } from "react";
 import { useDemo } from "../context.tsx";
 import { titleCase } from "../format.ts";
 import { IconButton } from "../primitives/IconButton.tsx";
+import { Segmented } from "../primitives/Segmented.tsx";
 
 interface JsonSchemaProp {
   type?: string;
@@ -356,17 +356,12 @@ function TimeControls({ status }: { status: AgentStatus }) {
           <ArrowChevronRight className="size-4" />
         </IconButton>
         <div className="flex-1" />
-        <Segment
-          size="sm"
-          selectedKey={String(rateHz)}
-          onSelectionChange={(k) => agent.command(AgentCommand.clockRate, { hz: Number(k) })}
-        >
-          {RATES.map((r) => (
-            <Segment.Item key={r.id} id={r.id}>
-              {r.label}
-            </Segment.Item>
-          ))}
-        </Segment>
+        <Segmented
+          label="Ticks per second"
+          value={String(rateHz)}
+          onChange={(k) => agent.command(AgentCommand.clockRate, { hz: Number(k) })}
+          options={RATES}
+        />
       </div>
     </div>
   );

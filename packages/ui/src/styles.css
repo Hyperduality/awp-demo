@@ -1,12 +1,10 @@
 @import "tailwindcss";
 @import "@heroui/styles";
-@import "@heroui-pro/react/css";
 @import "@fontsource-variable/geist";
 @import "@fontsource-variable/geist-mono";
 
 /* Components in this package and the apps that use it. */
 @source "./";
-@source "../node_modules/streamdown/dist";
 
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 

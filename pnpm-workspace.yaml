@@ -3,5 +3,4 @@ packages:
   - packages/*
 
 onlyBuiltDependencies:
-  - "@heroui-pro/react"
   - esbuild

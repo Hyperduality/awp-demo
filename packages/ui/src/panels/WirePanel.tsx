@@ -1,13 +1,13 @@
 import { type WireEntry, type WorldState, WorldTopic } from "@awp-demo/inspector";
 import { useStream, useTopic } from "@awp-demo/inspector/react";
 import { ArrowDownToLine, Pause, Play, TrashBin, Xmark } from "@gravity-ui/icons";
-import { Segment } from "@heroui-pro/react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useDemo, useFocusAction } from "../context.tsx";
 import { bytes, clockTime, decodePayload, stateTone, TONE_CLASS, type Tone } from "../format.ts";
 import { IconButton } from "../primitives/IconButton.tsx";
 import { JsonView } from "../primitives/JsonView.tsx";
+import { Segmented } from "../primitives/Segmented.tsx";
 
 type Filter = "all" | "control" | "actions" | "frames";
 
@@ -215,12 +215,17 @@ export function WirePanel() {
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-2 px-3 pb-2">
-        <Segment size="sm" selectedKey={filter} onSelectionChange={(k) => setFilter(k as Filter)}>
-          <Segment.Item id="all">All</Segment.Item>
-          <Segment.Item id="control">Control</Segment.Item>
-          <Segment.Item id="actions">Actions</Segment.Item>
-          <Segment.Item id="frames">Frames</Segment.Item>
-        </Segment>
+        <Segmented
+          label="Filter"
+          value={filter}
+          onChange={setFilter}
+          options={[
+            { id: "all", label: "All" },
+            { id: "control", label: "Control" },
+            { id: "actions", label: "Actions" },
+            { id: "frames", label: "Frames" },
+          ]}
+        />
         <div className="flex-1" />
         <div className="flex items-center gap-0.5 text-muted">
           <IconButton label={paused ? "Resume" : "Pause"} onPress={() => setPaused(paused ? null : entries)}>

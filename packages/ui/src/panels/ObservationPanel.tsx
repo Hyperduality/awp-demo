@@ -1,10 +1,10 @@
 import { type AgentStatus, AgentTopic, type WireEntry, type WorldState, WorldTopic } from "@awp-demo/inspector";
 import { useStream, useTopic } from "@awp-demo/inspector/react";
-import { Segment } from "@heroui-pro/react";
 import { type ReactNode, useMemo, useState } from "react";
 import { useDemo } from "../context.tsx";
 import { decodePayload } from "../format.ts";
 import { JsonView } from "../primitives/JsonView.tsx";
+import { Segmented } from "../primitives/Segmented.tsx";
 
 export type ChannelRenderers = Record<string, (payload: unknown) => ReactNode>;
 
@@ -37,13 +37,12 @@ export function ObservationPanel({ renderers = {} }: { renderers?: ChannelRender
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-2 px-3 pb-2">
         {channels.length > 1 && (
-          <Segment size="sm" selectedKey={current.channel} onSelectionChange={(k) => setPicked(String(k))}>
-            {channels.map((c) => (
-              <Segment.Item key={c.channel} id={c.channel}>
-                {c.channel}
-              </Segment.Item>
-            ))}
-          </Segment>
+          <Segmented
+            label="Channel"
+            value={current.channel}
+            onChange={setPicked}
+            options={channels.map((c) => ({ id: c.channel, label: c.channel }))}
+          />
         )}
         <div className="flex-1" />
         <span className="tnum text-xs text-muted">

@@ -1,12 +1,13 @@
 import { type ActivityEntry, AgentCommand, AgentTopic, type ControllerState } from "@awp-demo/inspector";
 import { useStream, useTopic } from "@awp-demo/inspector/react";
-import { Separator } from "@heroui/react";
-import { PromptInput, TextShimmer } from "@heroui-pro/react";
-import { StreamMarkdown } from "@heroui-pro/react/markdown";
+import { PaperPlane, StopFill } from "@gravity-ui/icons";
+import { Separator, TextArea } from "@heroui/react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useDemo, useFocusAction } from "../context.tsx";
 import { stateLabel, stateTone, TONE_CLASS } from "../format.ts";
+import { IconButton } from "../primitives/IconButton.tsx";
+import { Markdown } from "../primitives/Markdown.tsx";
 
 /** One timeline for every controller: what each did, thought, and said, and when control changed hands. */
 export function ActivityPanel({ composer = true }: { composer?: boolean }) {
@@ -123,9 +124,9 @@ function Content({ entry }: { entry: ActivityEntry }) {
             <span className="shrink-0 font-mono text-xs text-foreground">{entry.title}</span>
             <span className="min-w-0 flex-1 truncate text-xs text-muted">{entry.detail}</span>
             {entry.state === "executing" ? (
-              <TextShimmer className="shrink-0 text-xs">
+              <span className="tnum shrink-0 animate-pulse text-xs text-accent">
                 {data?.progress !== undefined ? `Executing ${Math.round(data.progress * 100)}%` : "Executing"}
-              </TextShimmer>
+              </span>
             ) : (
               <span className={`shrink-0 text-xs ${TONE_CLASS[tone]}`}>{stateLabel(entry.state)}</span>
             )}
@@ -143,11 +144,7 @@ function Content({ entry }: { entry: ActivityEntry }) {
     case "thought":
       return <Thought entry={entry} />;
     case "message":
-      return (
-        <StreamMarkdown className="text-sm text-foreground" isStreaming={entry.streaming === true}>
-          {entry.title}
-        </StreamMarkdown>
-      );
+      return <Markdown className="text-sm text-foreground">{entry.title}</Markdown>;
     case "event":
       return (
         <div className="text-sm">
@@ -188,7 +185,7 @@ function Thought({ entry }: { entry: ActivityEntry }) {
   if (entry.streaming) {
     return (
       <div className="text-sm">
-        <TextShimmer>Thinking</TextShimmer>
+        <span className="animate-pulse text-muted">Thinking</span>
         <p className="mt-0.5 line-clamp-2 text-xs text-muted">{entry.title.split("\n").filter(Boolean).at(-1)}</p>
       </div>
     );
@@ -215,32 +212,45 @@ function Composer({ controller }: { controller: ControllerState }) {
   const { agent } = useDemo();
   const [value, setValue] = useState("");
   const running = controller.engaged;
+  const send = () => {
+    const text = value.trim();
+    if (!text && running) return;
+    setValue("");
+    // An empty message asks the controller to start on its default task.
+    void agent.command(AgentCommand.message, { id: controller.id, text });
+  };
   return (
-    <div className="shrink-0 p-3 pt-2">
-      <PromptInput
+    <div className="flex shrink-0 items-end gap-2 p-3 pt-2">
+      <TextArea
+        aria-label={`Message ${controller.label}`}
+        placeholder={`Message ${controller.label}`}
+        variant="secondary"
+        rows={1}
+        fullWidth
+        className="max-h-32 min-h-9 resize-none text-sm"
         value={value}
-        onValueChange={setValue}
-        status={running ? "streaming" : "ready"}
-        onStop={() => agent.command(AgentCommand.stop, { id: controller.id })}
-        onSubmit={() => {
-          const text = value.trim();
-          if (!text) return;
-          setValue("");
-          void agent.command(AgentCommand.message, { id: controller.id, text });
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            send();
+          }
         }}
-        allowSubmitWhileRunning
-      >
-        <PromptInput.Shell>
-          <PromptInput.Content>
-            <PromptInput.TextArea placeholder={`Message ${controller.label}`} />
-          </PromptInput.Content>
-          <PromptInput.Toolbar>
-            <PromptInput.ToolbarEnd>
-              <PromptInput.Send />
-            </PromptInput.ToolbarEnd>
-          </PromptInput.Toolbar>
-        </PromptInput.Shell>
-      </PromptInput>
+      />
+      {running ? (
+        <IconButton
+          label="Stop"
+          variant="secondary"
+          size="md"
+          onPress={() => agent.command(AgentCommand.stop, { id: controller.id })}
+        >
+          <StopFill className="size-4" />
+        </IconButton>
+      ) : (
+        <IconButton label="Send" variant="primary" size="md" onPress={send}>
+          <PaperPlane className="size-4" />
+        </IconButton>
+      )}
     </div>
   );
 }

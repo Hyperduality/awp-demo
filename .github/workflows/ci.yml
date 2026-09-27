@@ -8,8 +8,6 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
-    env:
-      HEROUI_AUTH_TOKEN: ${{ secrets.HEROUI_AUTH_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -31,7 +29,6 @@ jobs:
       matrix:
         demo: [{ name: maze, port: 8711 }, { name: sorter, port: 8712 }, { name: vault, port: 8713 }]
     env:
-      HEROUI_AUTH_TOKEN: ${{ secrets.HEROUI_AUTH_TOKEN }}
       AWP_TOKEN: ci-conformance-token
     steps:
       - uses: actions/checkout@v4

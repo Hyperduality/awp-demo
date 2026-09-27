@@ -1,7 +1,6 @@
 import { AgentCommand, WorldTopic } from "@awp-demo/inspector";
 import { useTopic } from "@awp-demo/inspector/react";
-import { mixRgb, type Palette, toRgb, useCanvas, useDemo } from "@awp-demo/ui";
-import { Segment } from "@heroui-pro/react";
+import { mixRgb, type Palette, Segmented, toRgb, useCanvas, useDemo } from "@awp-demo/ui";
 import { useRef, useState } from "react";
 import type { VaultView } from "../shared/vault.ts";
 
@@ -160,10 +159,15 @@ export function WorldView() {
         </div>
       )}
       <div className="absolute top-2 right-3">
-        <Segment size="sm" selectedKey={mode} onSelectionChange={(k) => setMode(k as Mode)}>
-          <Segment.Item id="agent">Agent View</Segment.Item>
-          <Segment.Item id="truth">Truth</Segment.Item>
-        </Segment>
+        <Segmented
+          label="View"
+          value={mode}
+          onChange={setMode}
+          options={[
+            { id: "agent", label: "Agent View" },
+            { id: "truth", label: "Truth" },
+          ]}
+        />
       </div>
       {view && (
         <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center px-4">

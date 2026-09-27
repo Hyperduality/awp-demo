@@ -13,6 +13,8 @@ export { IconButton } from "./primitives/IconButton.tsx";
 export { JsonView } from "./primitives/JsonView.tsx";
 export { Keymap } from "./primitives/Keymap.tsx";
 export { KeyValue, SectionLabel } from "./primitives/KeyValue.tsx";
+export { Markdown } from "./primitives/Markdown.tsx";
+export { Segmented } from "./primitives/Segmented.tsx";
 export { DemoShell } from "./shell/DemoShell.tsx";
 export type { PanelDef } from "./shell/Workspace.tsx";
 export { applyTheme, useTheme } from "./theme.ts";

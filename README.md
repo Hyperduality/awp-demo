@@ -4,7 +4,7 @@ Runnable demos of the [Agent World Protocol](https://www.agentworldprotocol.com)
 
 - **World** (Node): a real AWP world, a WebSocket server on the `awp` subprotocol. Any AWP agent can connect to it.
 - **Agent** (Node): one AWP session, opened with [`@hyperduality/awp`](https://www.npmjs.com/package/@hyperduality/awp). Inside it, several controllers take turns driving: you at the keyboard, a program, and a language model.
-- **UI** (Vite + React): shows the world, the agent's activity, and every message on the wire, and configures the controllers. It never speaks AWP itself.
+- **UI** (Vite + React, [HeroUI](https://heroui.com)): shows the world, the agent's activity, and every message on the wire, and configures the controllers. It never speaks AWP itself.
 
 | Demo | Time model | Leads with | Shows |
 |---|---|---|---|
@@ -26,8 +26,6 @@ pnpm vault     # world :8713, UI http://localhost:5173
 ```
 
 `pnpm dev` runs all three demos at once. Copy `.env.example` to `.env` to change the bearer token or to give the LLM controllers keys from the environment. A key entered in the UI is held in the agent process's memory only.
-
-The UI depends on [HeroUI Pro](https://heroui.pro), which is licensed. `pnpm install` needs a Pro login (`npx heroui-pro login`), or `HEROUI_AUTH_TOKEN` in CI.
 
 ## Layout
 
