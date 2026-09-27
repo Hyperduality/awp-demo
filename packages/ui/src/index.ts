@@ -1,4 +1,4 @@
-export { type Draw, type Palette, useCanvas } from "./canvas.ts";
+export { type Draw, mixRgb, type Palette, toRgb, useCanvas } from "./canvas.ts";
 export { type DemoInfo, useDemo, useFocusAction } from "./context.tsx";
 export { DEMOS } from "./demos.ts";
 export * from "./format.ts";

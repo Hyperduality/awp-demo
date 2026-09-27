@@ -162,15 +162,18 @@ export class InspectorClient {
   private markDirty(topic: string): void {
     this.dirty.add(topic);
     if (this.frame !== undefined) return;
+    // Batch on the next animation frame, with a timer as a fallback: hidden pages get no frames.
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const run = () => {
+      if (this.frame === undefined) return;
+      if (typeof cancelAnimationFrame === "function") cancelAnimationFrame(this.frame);
+      clearTimeout(timer);
       this.frame = undefined;
       const topics = [...this.dirty];
       this.dirty.clear();
       for (const t of topics) for (const fn of this.listeners.get(t) ?? []) fn();
     };
-    this.frame =
-      typeof requestAnimationFrame === "function"
-        ? requestAnimationFrame(run)
-        : (setTimeout(run, 16) as unknown as number);
+    this.frame = typeof requestAnimationFrame === "function" ? requestAnimationFrame(run) : -1;
+    timer = setTimeout(run, 100);
   }
 }

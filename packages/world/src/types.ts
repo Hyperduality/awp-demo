@@ -15,7 +15,7 @@ export interface ActionRun {
   /** Begin a safe abort. Returns how long it takes in ms (streaming only; lockstep aborts complete at once). */
   abort?(): number | undefined;
   /** Apply one command-channel setpoint (streaming actions). Returns whether the envelope clamped it. */
-  command?(payload: unknown): { clamped?: boolean } | undefined;
+  command?(payload: unknown): { clamped?: boolean; rejected?: boolean } | undefined;
 }
 
 /** A world-specific admission verdict, after schema validation and before preemption. */

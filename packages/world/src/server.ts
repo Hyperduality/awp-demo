@@ -174,12 +174,15 @@ export async function serveWorld<View>(def: WorldDefinition<View>, opts: ServeOp
 
   // Inspector: manifest, sessions, render view, operator commands.
   let viewTimer: NodeJS.Timeout | undefined;
+  let stateTimer: NodeJS.Timeout | undefined;
   if (inspector) {
     inspector.state(WorldTopic.manifest, def.manifest);
     worldState = inspector.state<WorldState>(WorldTopic.world, { url, ...host.describe() }, { throttleMs: 50 });
     const layout = inspector.state(WorldTopic.layout, host.sim.staticView?.() ?? null);
     const view = inspector.state(WorldTopic.view, host.sim.view());
     viewTimer = setInterval(() => view.set(host.sim.view()), 1000 / (opts.viewHz ?? 30));
+    // Clocks and sequence numbers move without structural changes; refresh them a few times a second.
+    stateTimer = setInterval(publishWorld, 250);
     const refreshLayout = () => layout.set(host.sim.staticView?.() ?? null);
     inspector.handle(WorldCommand.reset, (args) => {
       const a = (args ?? {}) as { initialState?: string; seed?: number };
@@ -217,6 +220,7 @@ export async function serveWorld<View>(def: WorldDefinition<View>, opts: ServeOp
       process.off("SIGUSR1", onUsr1);
       process.off("SIGUSR2", onUsr2);
       if (viewTimer) clearInterval(viewTimer);
+      if (stateTimer) clearInterval(stateTimer);
       for (const ws of sockets.values()) ws.terminate();
       await new Promise<void>((resolve) => wss.close(() => resolve()));
       await inspector?.close();

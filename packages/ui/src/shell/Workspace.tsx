@@ -120,6 +120,9 @@ export function Workspace({ panels, api }: { panels: PanelDef[]; api: WorkspaceA
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
+    // Measure now as well: observers only report on rendered frames, which hidden pages skip.
+    const r = el.getBoundingClientRect();
+    setSize({ w: r.width, h: r.height });
     const ro = new ResizeObserver(([e]) => {
       const r = e!.contentRect;
       setSize({ w: r.width, h: r.height });

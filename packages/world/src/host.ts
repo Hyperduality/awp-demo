@@ -1160,13 +1160,14 @@ export class WorldHost<View = unknown> {
     }
     const verdict = a.run?.command?.(payload);
     const st = a.stream!;
-    st.frames_applied += 1;
     st.last_seq = seq;
     st.lastFrameNs = this.clock(s);
-    if (verdict?.clamped) {
+    // Out-of-envelope setpoints count as clamped either way; a rejected one is not applied (AWP-CMD-006).
+    if (verdict?.clamped || verdict?.rejected) {
       st.clamped_count += 1;
       a.clamped = true;
     }
+    if (!verdict?.rejected) st.frames_applied += 1;
     if (typeof p.ts_mono_ns === "number") s.telemetry.command.push(Math.max(0, this.clock(s) - p.ts_mono_ns));
     this.audit(s, "in", "frame", {
       channel_id: p.channel_id,
@@ -1185,6 +1186,11 @@ export class WorldHost<View = unknown> {
   // Execution
 
   private begin(s: Session, a: Action): void {
+    // The first action to execute after safe-state entry ends it; the event precedes the action's status (AWP-SAF-008).
+    if (s.inSafeState) {
+      s.inSafeState = false;
+      this.event(s, "safe_state_exited", { embodiment: a.embodiment });
+    }
     const run = this.sim.start(a.embodiment, a.type, a.params, { actionId: a.id, sessionId: s.id });
     a.run = run;
     a.lastProgressNs = this.clock(s);
@@ -1209,10 +1215,6 @@ export class WorldHost<View = unknown> {
       }
     } else {
       this.transition(s, a, "executing", extra);
-    }
-    if (s.inSafeState) {
-      s.inSafeState = false;
-      this.event(s, "safe_state_exited", { embodiment: a.embodiment });
     }
   }
 
@@ -1309,8 +1311,7 @@ export class WorldHost<View = unknown> {
     const p: Json = { action_id: a.id, state: a.state, status_seq: 0, ts_mono_ns: a.lastTs };
     if (this.mode === "lockstep") p.tick = this.tick;
     for (const [k, v] of Object.entries(extra)) if (v !== undefined) p[k] = v;
-    if (a.state === "executing" && a.schema.duration === "streaming" && a.stream && p.stream === undefined)
-      p.stream = this.streamStats(a);
+    if (a.schema.duration === "streaming" && a.stream && p.stream === undefined) p.stream = this.streamStats(a);
     return p;
   }
 
