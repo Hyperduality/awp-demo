@@ -1,0 +1,15 @@
+{
+  "embodiment": "explorer_0",
+  "subscribe": ["map", "status"],
+  "moves": [
+    { "type": "wait", "params": { "ticks": 40 } },
+    { "type": "wait", "params": { "ticks": 41 } },
+    { "type": "wait", "params": { "ticks": 42 } }
+  ],
+  "extended_min_ticks": 20,
+  "instant": { "type": "move", "params": { "direction": "south" } },
+  "invalid": { "type": "move", "params": { "direction": "up" } },
+  "initial_state": "default",
+  "operator": { "estop_engage": "kill -USR1 $WORLD_PID", "estop_release": "kill -USR2 $WORLD_PID" },
+  "audit_dir": "conformance/audit"
+}

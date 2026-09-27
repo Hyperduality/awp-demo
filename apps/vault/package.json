@@ -1,0 +1,44 @@
+{
+  "name": "vault",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev:world": "tsx watch --clear-screen=false src/world/index.ts",
+    "dev:agent": "tsx watch --clear-screen=false src/agent/index.ts",
+    "dev:ui": "vite",
+    "world": "tsx src/world/index.ts",
+    "agent": "tsx src/agent/index.ts",
+    "build": "vite build",
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.ui.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@awp-demo/agent": "workspace:*",
+    "@awp-demo/inspector": "workspace:*",
+    "@awp-demo/ui": "workspace:*",
+    "@awp-demo/world": "workspace:*",
+    "@gravity-ui/icons": "^2.22.0",
+    "@heroui-pro/react": "1.0.0-beta.10",
+    "@heroui/react": "^3.2.6",
+    "@hyperduality/awp": "0.1.0-alpha.4",
+    "ai": "^7.0.118",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@ai-sdk/provider": "^4.0.18",
+    "@awp-demo/tsconfig": "workspace:*",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^24.19.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.15",
+    "typescript": "~5.9.3",
+    "vite": "^8.3.1",
+    "vitest": "^5.0.2"
+  }
+}

@@ -12,11 +12,6 @@
     "test": {
       "outputs": []
     },
-    "dev": {
-      "cache": false,
-      "persistent": true,
-      "with": ["dev:world", "dev:agent", "dev:ui"]
-    },
     "dev:world": {
       "cache": false,
       "persistent": true

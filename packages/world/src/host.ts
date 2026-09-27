@@ -204,6 +204,8 @@ export class WorldHost<View = unknown> {
   private simTimeNs = 0;
   private lastAdvanceNs: number | undefined;
   private sessionCounter = 0;
+  /** Session ids are unique beyond this process too, so audit files never collide (AWP-SES-009). */
+  private readonly nonce = Math.random().toString(36).slice(2, 6);
   private initialState: string;
   private seed: number;
 
@@ -377,15 +379,14 @@ export class WorldHost<View = unknown> {
     this.now = now;
     if (this.eStop) return this.drain();
     this.eStop = true;
+    // As on safe-state entry: stop, end every action, then report the event (AWP-EVT-002, AWP-SAF-004).
     for (const s of this.sessions.values()) {
-      for (const emb of s.embodiments) {
-        this.sim.safeStop(emb);
-        this.event(s, "e_stop_engaged", { embodiment: emb, source: "operator" });
-      }
+      for (const emb of s.embodiments) this.sim.safeStop(emb);
       for (const a of this.liveActions(s)) {
         if (a.state === "executing" || a.state === "cancelling") this.finish(s, a, "failed", { reason: "e_stop" });
         else this.finish(s, a, "cancelled", { reason: "e_stop" });
       }
+      for (const emb of s.embodiments) this.event(s, "e_stop_engaged", { embodiment: emb, source: "operator" });
     }
     this.hooks.changed?.();
     return this.drain();
@@ -602,7 +603,7 @@ export class WorldHost<View = unknown> {
     const admin = ((p.admin as AdminOperation[] | undefined) ?? []).filter((op) => this.adminAvailable(op, observer));
 
     const s: Session = {
-      id: `sess_${String(++this.sessionCounter).padStart(2, "0")}`,
+      id: `sess_${this.nonce}_${String(++this.sessionCounter).padStart(3, "0")}`,
       token: mintToken("st_"),
       mode,
       conn: c,
