@@ -8,7 +8,6 @@ Runnable demos of the [Agent World Protocol](https://www.agentworldprotocol.com)
 
 | Demo | Time model | Leads with | Shows |
 |---|---|---|---|
-| **Maze** | streaming | manual | Keyboard teleop on a command channel at 30 Hz, the per-action and session watchdogs, an autopilot that maps the maze from its range scan |
 | **Sorter** | lockstep | program | A two-link arm and a gripper bound together (multi-bind), queue and replace preemption, a program that intercepts parcels on a conveyor |
 | **Vault** | lockstep | LLM | A language model exploring a dark vault through world actions, with the world held still while it thinks |
 
@@ -20,12 +19,11 @@ Node 24 and pnpm 10.
 
 ```bash
 pnpm install
-pnpm maze      # world :8711, UI http://localhost:5171
 pnpm sorter    # world :8712, UI http://localhost:5172
 pnpm vault     # world :8713, UI http://localhost:5173
 ```
 
-`pnpm dev` runs all three demos at once. Copy `.env.example` to `.env` to change the bearer token or to give the LLM controllers keys from the environment. A key entered in the UI is held in the agent process's memory only.
+`pnpm dev` runs both demos at once. Copy `.env.example` to `.env` to change the bearer token or to give the LLM controllers keys from the environment. A key entered in the UI is held in the agent process's memory only.
 
 ## Layout
 

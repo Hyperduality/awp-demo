@@ -8,7 +8,6 @@
   },
   "scripts": {
     "dev": "turbo run dev:world dev:agent dev:ui",
-    "maze": "turbo run dev:world dev:agent dev:ui --filter=maze",
     "sorter": "turbo run dev:world dev:agent dev:ui --filter=sorter",
     "vault": "turbo run dev:world dev:agent dev:ui --filter=vault",
     "build": "turbo run build",

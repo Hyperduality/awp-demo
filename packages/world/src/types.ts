@@ -44,7 +44,7 @@ export interface Sim<View = unknown> {
   safeStop(embodiment: string): void;
   /** Render state for the UI (not part of AWP). */
   view(): View;
-  /** Static render data sent once per inspector connection (e.g. the maze layout). */
+  /** Static render data sent once per inspector connection (e.g. the sorter cell geometry). */
   staticView?(): unknown;
   /** Operator-level commands from the UI (not part of AWP), e.g. changing a spawn rate. */
   operator?(name: string, args: unknown): unknown;

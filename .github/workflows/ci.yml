@@ -27,7 +27,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        demo: [{ name: maze, port: 8711 }, { name: sorter, port: 8712 }, { name: vault, port: 8713 }]
+        demo: [{ name: sorter, port: 8712 }, { name: vault, port: 8713 }]
     env:
       AWP_TOKEN: ci-conformance-token
     steps:
