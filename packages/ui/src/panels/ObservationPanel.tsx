@@ -35,17 +35,18 @@ export function ObservationPanel({ renderers = {} }: { renderers?: ChannelRender
   const render = renderers[current.channel];
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center gap-2 px-3 pb-2">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-3 pb-2">
         {channels.length > 1 && (
-          <Segmented
-            label="Channel"
-            value={current.channel}
-            onChange={setPicked}
-            options={channels.map((c) => ({ id: c.channel, label: c.channel }))}
-          />
+          <div className="min-w-0 max-w-full overflow-x-auto [scrollbar-width:none]">
+            <Segmented
+              label="Channel"
+              value={current.channel}
+              onChange={setPicked}
+              options={channels.map((c) => ({ id: c.channel, label: c.channel }))}
+            />
+          </div>
         )}
-        <div className="flex-1" />
-        <span className="tnum text-xs text-muted">
+        <span className="tnum ml-auto shrink-0 text-xs text-muted">
           {latest?.seq !== undefined ? `#${latest.seq.toLocaleString()}` : ""}
         </span>
       </div>
