@@ -25,15 +25,15 @@ export const program: Controller<Config> = {
     let escaped = false;
 
     const step = async () => {
+      if (progressOf(ctx)?.escaped || escaped) {
+        ctx.release();
+        ctx.status("Escaped");
+        return ctx.wait({ ms: 1000 });
+      }
       if (!ctx.hasAuthority) await ctx.acquire();
       const pose = ctx.latest<PosePayload>("pose");
       const progress = progressOf(ctx);
       if (!pose || !progress) return ctx.wait({ ms: 100 });
-      if (progress.escaped || escaped) {
-        ctx.status("Escaped");
-        ctx.release();
-        return ctx.wait({ ms: 1000 });
-      }
       if (!scanned && ctx.config.lookaround) {
         scanned = true;
         ctx.log({ kind: "decision", title: "Look around" });
