@@ -16,6 +16,8 @@ export type DriveInput =
 
 /** Input older than this is treated as released: the deadman between the UI and the world. */
 const DEADMAN_MS = 250;
+/** Just inside the world's turn envelope. */
+const TURN_LIMIT = 3.9;
 
 /**
  * Keyboard teleop. While keys are held it runs a `teleop` streaming action and sends velocity
@@ -54,7 +56,8 @@ export const manual: Controller<Config> = {
           await ctx.command("drive", {
             forward_mps: round(live.forward * ctx.config.speed_mps * k),
             strafe_mps: round(live.strafe * ctx.config.speed_mps * 0.8),
-            turn_radps: round(live.turn * ctx.config.turn_radps),
+            // The world rejects turn setpoints beyond 4 rad/s (AWP-CMD-006); stay just inside it.
+            turn_radps: round(Math.max(-TURN_LIMIT, Math.min(TURN_LIMIT, live.turn * ctx.config.turn_radps))),
           });
           if (now - activeAt > ctx.config.hold_ms) break;
           await new Promise((r) => setTimeout(r, 33));

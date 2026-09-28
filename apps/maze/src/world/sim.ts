@@ -109,12 +109,13 @@ export class MazeSim implements Sim<MazeView> {
   step(dtMs: number): void {
     const dt = dtMs / 1000;
     if (!this.escaped) this.elapsed += dt;
-    // Accelerate toward the commanded velocities, then move with wall sliding.
+    // Accelerate toward the commanded linear velocities, then move with wall sliding. Turn rate
+    // takes effect at once, so mouse look has no lag or overshoot.
     const approach = (cur: number, want: number, rate: number) =>
       cur + Math.max(-rate * dt, Math.min(rate * dt, want - cur));
     this.vel.forward = approach(this.vel.forward, this.cmd.forward, ACCEL);
     this.vel.strafe = approach(this.vel.strafe, this.cmd.strafe, ACCEL);
-    this.vel.turn = approach(this.vel.turn, this.cmd.turn, ACCEL * 2);
+    this.vel.turn = this.cmd.turn;
     this.yaw = wrapAngle(this.yaw + this.vel.turn * dt);
     const c = Math.cos(this.yaw);
     const s = Math.sin(this.yaw);

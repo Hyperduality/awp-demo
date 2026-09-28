@@ -8,4 +8,6 @@ await serveWorld(maze, {
   inspectorPort: Number(process.env.INSPECTOR_PORT ?? PORTS.worldInspector),
   auditDir: process.env.AWP_AUDIT_DIR ?? "awp-audit",
   operatorSignals: true,
+  // Match the sim step so the first-person view moves every frame, not every other one.
+  viewHz: 60,
 });

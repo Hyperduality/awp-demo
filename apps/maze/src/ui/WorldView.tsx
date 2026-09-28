@@ -5,6 +5,12 @@ import { useEffect, useRef, useState } from "react";
 import { castRay, type Layout, type MazeView, wrapAngle } from "../shared/maze.ts";
 
 const FOV = (72 * Math.PI) / 180;
+/** Turn input per pixel-per-second of mouse travel: 400 px/s is a full-rate turn. */
+const MOUSE_SENSITIVITY = 1 / 400;
+/** Time constant of the mouse turn-rate smoothing: long enough to even out ticks, short enough not to lag. */
+const MOUSE_SMOOTHING_S = 0.05;
+/** Cap on the turn input, so mouse plus keys stays inside the world's turn envelope. */
+const TURN_MAX = 1.5;
 const KEYS = {
   forward: ["w", "arrowup"],
   back: ["s", "arrowdown"],
@@ -104,39 +110,67 @@ export function WorldView() {
     if (minimapRef.current) drawMinimap(ctx, L, v, w, p);
   });
 
-  // Keyboard teleop: key state on change, and a keepalive while keys are held (the deadman is 250 ms).
+  // Teleop: key state on change, plus a 30 Hz tick while keys are held or the mouse is looking (the
+  // deadman is 250 ms). The tick lives outside render: the view re-renders at 30 Hz, faster than an
+  // interval recreated on every render would ever fire.
   const held = useRef(new Set<string>());
+  const mouse = useRef({ dx: 0, turn: 0, at: performance.now() });
+  const moving = useRef(false);
   const send = (input: unknown) => agent.command(AgentCommand.input, { id: "manual", input }).catch(() => undefined);
   const drive = () => {
     const k = held.current;
     const on = (names: string[]) => names.some((n) => k.has(n));
-    void send({
-      kind: "drive",
-      forward: (on(KEYS.forward) ? 1 : 0) - (on(KEYS.back) ? 1 : 0),
-      strafe: (on(KEYS.right) ? 1 : 0) - (on(KEYS.left) ? 1 : 0),
-      turn: (on(KEYS.turnRight) ? 1 : 0) - (on(KEYS.turnLeft) ? 1 : 0),
-      fast: k.has("shift"),
-    });
+    const forward = (on(KEYS.forward) ? 1 : 0) - (on(KEYS.back) ? 1 : 0);
+    const strafe = (on(KEYS.right) ? 1 : 0) - (on(KEYS.left) ? 1 : 0);
+    const keyTurn = (on(KEYS.turnRight) ? 1 : 0) - (on(KEYS.turnLeft) ? 1 : 0);
+    const turn = Math.max(-TURN_MAX, Math.min(TURN_MAX, keyTurn + mouse.current.turn));
+    moving.current = forward !== 0 || strafe !== 0 || turn !== 0;
+    void send({ kind: "drive", forward, strafe, turn, fast: k.has("shift") });
   };
+  const driveRef = useRef(drive);
+  driveRef.current = drive;
   useEffect(() => {
-    const t = setInterval(() => held.current.size > 0 && drive(), 100);
+    const t = setInterval(() => {
+      const now = performance.now();
+      const m = mouse.current;
+      // Mouse travel since the last tick becomes a turn rate, smoothed so uneven event timing
+      // doesn't read as jitter. Near zero it snaps to zero, so the tick stops sending.
+      const dt = Math.max(0.001, (now - m.at) / 1000);
+      const raw = (m.dx / dt) * MOUSE_SENSITIVITY;
+      m.turn += (raw - m.turn) * (1 - Math.exp(-dt / MOUSE_SMOOTHING_S));
+      if (m.dx === 0 && Math.abs(m.turn) < 0.02) m.turn = 0;
+      m.dx = 0;
+      m.at = now;
+      // Keep sending while anything is active, and once more when it all stops.
+      if (held.current.size > 0 || m.turn !== 0 || moving.current) driveRef.current();
+    }, 33);
     return () => clearInterval(t);
-  });
+  }, []);
 
   return (
     <div className="relative h-full w-full">
       <canvas
         ref={canvas}
         tabIndex={0}
-        aria-label="First-person view of the maze. Click, then drive with W A S D and the arrow keys."
+        aria-label="First-person view of the maze. Click, then drive with W A S D and look with the mouse or arrow keys."
         className="h-full w-full outline-none"
         onFocus={() => setFocused(true)}
-        onBlur={() => {
+        onBlur={(e) => {
           setFocused(false);
           held.current.clear();
+          mouse.current.dx = 0;
+          mouse.current.turn = 0;
+          if (document.pointerLockElement === e.currentTarget) document.exitPointerLock();
           drive();
         }}
-        onPointerDown={(e) => e.currentTarget.focus()}
+        onPointerDown={(e) => {
+          e.currentTarget.focus();
+          // Pointer lock for mouse look; Esc releases it. Some browsers return a promise that can reject.
+          void Promise.resolve(e.currentTarget.requestPointerLock()).catch(() => undefined);
+        }}
+        onMouseMove={(e) => {
+          if (document.pointerLockElement === e.currentTarget) mouse.current.dx += e.movementX;
+        }}
         onKeyDown={(e) => {
           const key = e.key.toLowerCase();
           if (key === "m") return setMinimap((m) => !m);
@@ -178,7 +212,7 @@ export function WorldView() {
       {!focused && !view?.escaped && (
         <div className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center">
           <span className="rounded-full bg-overlay/80 px-3 py-1.5 text-xs text-muted backdrop-blur">
-            Click to drive
+            Click to drive · mouse to look
           </span>
         </div>
       )}
