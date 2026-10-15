@@ -212,9 +212,10 @@ function Composer({ controller }: { controller: ControllerState }) {
   const { agent } = useDemo();
   const [value, setValue] = useState("");
   const running = controller.engaged;
+  const unavailable = controller.unavailable;
   const send = () => {
     const text = value.trim();
-    if (!text && running) return;
+    if (unavailable || (!text && running)) return;
     setValue("");
     // An empty message asks the controller to start on its default task.
     void agent.command(AgentCommand.message, { id: controller.id, text });
@@ -223,10 +224,11 @@ function Composer({ controller }: { controller: ControllerState }) {
     <div className="flex shrink-0 items-end gap-2 p-3 pt-2">
       <TextArea
         aria-label={`Message ${controller.label}`}
-        placeholder={`Message ${controller.label}`}
+        placeholder={unavailable ?? `Message ${controller.label}`}
         variant="secondary"
         rows={1}
         fullWidth
+        disabled={Boolean(unavailable)}
         className="max-h-32 min-h-9 resize-none text-sm"
         value={value}
         onChange={(e) => setValue(e.target.value)}
@@ -247,7 +249,7 @@ function Composer({ controller }: { controller: ControllerState }) {
           <StopFill className="size-4" />
         </IconButton>
       ) : (
-        <IconButton label="Send" variant="primary" size="md" onPress={send}>
+        <IconButton label="Send" variant="primary" size="md" onPress={send} isDisabled={Boolean(unavailable)}>
           <PaperPlane className="size-4" />
         </IconButton>
       )}

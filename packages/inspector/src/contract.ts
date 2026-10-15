@@ -145,6 +145,8 @@ export interface ControllerState {
   pinned: boolean;
   /** Short present-tense status, e.g. "Tracking P-12". */
   status?: string | undefined;
+  /** Why the controller cannot run with its current config (e.g. no API key), or undefined. */
+  unavailable?: string | undefined;
   config: unknown;
   /** JSON Schema of `config`, for a generated form. Secret fields carry `"x-secret": true`. */
   configSchema: unknown;

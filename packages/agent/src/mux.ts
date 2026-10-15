@@ -262,6 +262,7 @@ export class ControlMux {
       authority: this.authority === s.def.id,
       pinned: s.pinned,
       status: s.status,
+      unavailable: s.def.unavailable?.(s.config),
       config: redactConfig(s.config, s.secrets),
       configSchema: s.schema,
     }));

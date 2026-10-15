@@ -22,6 +22,8 @@ export interface Controller<C = unknown> {
   config: z.ZodType<C>;
   /** Enabled when the agent starts (default true). */
   enabled?: boolean;
+  /** Why this config cannot run (e.g. a missing API key), for the UI; undefined when it can. */
+  unavailable?(config: C): string | undefined;
   /** Called when enabled with a live session; the instance lives until disabled or the session ends. */
   create(ctx: ControlContext<C>): ControllerInstance<C>;
 }
