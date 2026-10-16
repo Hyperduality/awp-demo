@@ -24,6 +24,8 @@ export interface Controller<C = unknown> {
   enabled?: boolean;
   /** Why this config cannot run (e.g. a missing API key), for the UI; undefined when it can. */
   unavailable?(config: C): string | undefined;
+  /** Placeholders for empty config fields, e.g. where a key comes from when the UI hasn't set one. */
+  hints?(config: C): Record<string, string>;
   /** Called when enabled with a live session; the instance lives until disabled or the session ends. */
   create(ctx: ControlContext<C>): ControllerInstance<C>;
 }

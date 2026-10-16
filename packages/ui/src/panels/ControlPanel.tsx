@@ -5,6 +5,7 @@ import {
   type ControllerState,
   type LlmProvider,
   MODEL_SUGGESTIONS,
+  PROVIDER_LABELS,
   REDACTED,
 } from "@awp-demo/inspector";
 import { useTopic } from "@awp-demo/inspector/react";
@@ -138,7 +139,16 @@ function ConfigForm({ controller }: { controller: ControllerState }) {
             />
           );
         if (isLlm && key === "baseUrl" && config.provider !== "openai-compatible") return null;
-        return <Field key={key} name={key} prop={p} value={config[key]} onCommit={(v) => set(key, v)} />;
+        return (
+          <Field
+            key={key}
+            name={key}
+            prop={p}
+            value={config[key]}
+            hint={controller.hints?.[key]}
+            onCommit={(v) => set(key, v)}
+          />
+        );
       })}
     </div>
   );
@@ -148,11 +158,13 @@ function Field({
   name,
   prop,
   value,
+  hint,
   onCommit,
 }: {
   name: string;
   prop: JsonSchemaProp;
   value: unknown;
+  hint?: string | undefined;
   onCommit(v: unknown): void;
 }) {
   const label = prop.title ?? titleCase(name);
@@ -180,7 +192,7 @@ function Field({
           <ListBox>
             {prop.enum.map((o) => (
               <ListBox.Item key={o} id={o} textValue={o}>
-                {PROVIDER_LABELS[o] ?? titleCase(o)}
+                {PROVIDER_LABELS[o as LlmProvider] ?? titleCase(o)}
                 <ListBox.ItemIndicator />
               </ListBox.Item>
             ))}
@@ -208,6 +220,7 @@ function Field({
     <TextInput
       label={label}
       secret={prop["x-secret"] === true}
+      hint={hint}
       value={value === undefined ? "" : String(value)}
       numeric={prop.type === "number" || prop.type === "integer"}
       onCommit={onCommit}
@@ -254,6 +267,7 @@ function NumberSlider({
 function TextInput(props: {
   label: string;
   secret: boolean;
+  hint?: string | undefined;
   numeric: boolean;
   value: string;
   onCommit(v: unknown): void;
@@ -270,7 +284,7 @@ function TextInput(props: {
       <Input
         variant="secondary"
         type={props.secret ? "password" : "text"}
-        placeholder={props.secret ? "Not set" : undefined}
+        placeholder={props.hint ?? (props.secret ? "Not set" : undefined)}
         onFocus={() => props.secret && local === REDACTED && setLocal("")}
       />
     </TextField>
@@ -286,16 +300,20 @@ function ModelField({
   value: string;
   onCommit(v: string): void;
 }) {
-  const [input, setInput] = useState(value);
-  useEffect(() => setInput(value), [value]);
   const options = MODEL_SUGGESTIONS[provider] ?? [];
+  // Known models show their label; anything else is a custom model id, shown and sent as typed.
+  const labelOf = (id: string) => options.find((o) => o.id === id)?.label ?? id;
+  const idOf = (text: string) => options.find((o) => o.label === text)?.id ?? text;
+  const [input, setInput] = useState(labelOf(value));
+  // biome-ignore lint/correctness/useExhaustiveDependencies: labelOf depends only on provider
+  useEffect(() => setInput(labelOf(value)), [value, provider]);
   return (
     <ComboBox
       allowsCustomValue
       inputValue={input}
       onInputChange={setInput}
       onSelectionChange={(k) => k && onCommit(String(k))}
-      onBlur={() => input && input !== value && onCommit(input)}
+      onBlur={() => input && idOf(input) !== value && onCommit(idOf(input))}
       menuTrigger="focus"
     >
       <Label>Model</Label>
@@ -306,8 +324,8 @@ function ModelField({
       <ComboBox.Popover>
         <ListBox>
           {options.map((m) => (
-            <ListBox.Item key={m} id={m} textValue={m}>
-              {m}
+            <ListBox.Item key={m.id} id={m.id} textValue={m.label}>
+              {m.label}
               <ListBox.ItemIndicator />
             </ListBox.Item>
           ))}
@@ -316,13 +334,6 @@ function ModelField({
     </ComboBox>
   );
 }
-
-const PROVIDER_LABELS: Record<string, string> = {
-  anthropic: "Anthropic",
-  openai: "OpenAI",
-  google: "Google",
-  "openai-compatible": "OpenAI-compatible",
-};
 
 const RATES = [
   { id: "5", label: "5" },

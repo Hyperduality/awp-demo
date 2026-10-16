@@ -147,6 +147,8 @@ export interface ControllerState {
   status?: string | undefined;
   /** Why the controller cannot run with its current config (e.g. no API key), or undefined. */
   unavailable?: string | undefined;
+  /** Placeholders for empty config fields, keyed by field (e.g. the environment variable a key comes from). */
+  hints?: Record<string, string> | undefined;
   config: unknown;
   /** JSON Schema of `config`, for a generated form. Secret fields carry `"x-secret": true`. */
   configSchema: unknown;
@@ -202,17 +204,37 @@ export type LlmProvider = z.infer<typeof LlmProvider>;
 
 export const LlmConfig = z.object({
   provider: LlmProvider.default("anthropic"),
-  model: z.string().min(1).default("claude-sonnet-5"),
+  model: z.string().min(1).default("claude-sonnet-5-5"),
   apiKey: z.string().optional().meta({ "x-secret": true }),
   baseUrl: z.string().optional(),
   maxSteps: z.number().int().min(1).max(200).default(40),
 });
 export type LlmConfig = z.infer<typeof LlmConfig>;
 
-export const MODEL_SUGGESTIONS: Record<LlmProvider, string[]> = {
-  anthropic: ["claude-sonnet-5", "claude-opus-5-5", "claude-haiku-4-5"],
-  openai: ["gpt-5.4", "gpt-5-mini"],
-  google: ["gemini-2.5-pro", "gemini-2.5-flash"],
+export const PROVIDER_LABELS: Record<LlmProvider, string> = {
+  anthropic: "Anthropic",
+  openai: "OpenAI",
+  google: "Google",
+  "openai-compatible": "OpenAI-compatible",
+};
+
+export const MODEL_SUGGESTIONS: Record<LlmProvider, { id: string; label: string }[]> = {
+  anthropic: [
+    { id: "claude-sonnet-5-5", label: "Claude Sonnet 5.5" },
+    { id: "claude-opus-5-5", label: "Claude Opus 5.5" },
+    { id: "claude-haiku-5-5", label: "Claude Haiku 5.5" },
+    { id: "claude-fable-5-1", label: "Claude Fable 5.1" },
+  ],
+  openai: [
+    { id: "gpt-6-astra", label: "GPT-6 Astra" },
+    { id: "gpt-6.1-sol", label: "GPT-6.1 Sol" },
+    { id: "gpt-6-luna", label: "GPT-6 Luna" },
+  ],
+  google: [
+    { id: "gemini-4-argon", label: "Gemini 4 Argon" },
+    { id: "gemini-3.8-flash", label: "Gemini 3.8 Flash" },
+    { id: "gemini-3.5-flash-lite", label: "Gemini 3.5 Flash-Lite" },
+  ],
   "openai-compatible": [],
 };
 

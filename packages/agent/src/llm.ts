@@ -6,7 +6,7 @@ import { createAnthropic } from "@ai-sdk/anthropic";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import { LlmConfig } from "@awp-demo/inspector";
+import { LlmConfig, PROVIDER_LABELS } from "@awp-demo/inspector";
 import { AwpError, type WorldManifest } from "@hyperduality/awp";
 import {
   hasToolCall,
@@ -67,7 +67,7 @@ export function missingCredentials(config: LlmConfig): string | undefined {
   if (hasCredentials(config)) return undefined;
   return config.provider === "openai-compatible"
     ? "Add a base URL in the LLM settings."
-    : `Add a ${config.provider} key in the LLM settings.`;
+    : `Add your ${PROVIDER_LABELS[config.provider]} API key in the LLM settings.`;
 }
 
 export interface ActionOutcome {
@@ -204,6 +204,10 @@ export function createLlmController<C extends LlmConfig = LlmConfig>(opts: LlmCo
     config: (opts.config ?? LlmConfig) as z.ZodType<C>,
     enabled: opts.enabled ?? true,
     unavailable: (config) => (opts.model ? undefined : missingCredentials(config)),
+    hints: (config): Record<string, string> => {
+      const envKey = ENV_KEYS[config.provider];
+      return envKey && process.env[envKey] ? { apiKey: `Using ${envKey} from the environment` } : {};
+    },
     create(ctx): ControllerInstance<C> {
       const messages: ModelMessage[] = [];
       let turn: AbortController | undefined;
