@@ -41,8 +41,6 @@ export function App({ world, agent }: { world: InspectorClient; agent: Inspector
         area: [0, 0, 7, 7],
         flush: true,
         stackedHeight: 380,
-        minWidth: 360,
-        minHeight: 240,
         actions: (
           <>
             <IconButton label="Nudge a parcel" onPress={() => world.command(WorldCommand.operator, { name: "nudge" })}>
@@ -53,12 +51,11 @@ export function App({ world, agent }: { world: InspectorClient; agent: Inspector
         ),
         children: <WorldView />,
       },
-      { id: "activity", title: "Activity", area: [7, 0, 5, 7], minWidth: 320, children: <ActivityPanel /> },
+      { id: "activity", title: "Activity", area: [7, 0, 5, 7], children: <ActivityPanel /> },
       {
         id: "control",
         title: "Control",
         area: [0, 7, 3, 5],
-        minWidth: 280,
         children: (
           <ControlPanel
             extras={{
@@ -77,10 +74,10 @@ export function App({ world, agent }: { world: InspectorClient; agent: Inspector
           />
         ),
       },
-      { id: "wire", title: "Wire", area: [3, 7, 6, 5], minWidth: 360, children: <WirePanel /> },
-      { id: "session", title: "Session", area: [9, 7, 3, 5], minWidth: 260, children: <SessionPanel /> },
-      { id: "observation", title: "Agent View", area: [7, 3, 5, 5], hidden: true, children: <ObservationPanel /> },
-      { id: "about", title: "About", area: [3, 2, 5, 7], hidden: true, children: <AboutPanel /> },
+      { id: "wire", title: "Wire", area: [3, 7, 6, 5], children: <WirePanel /> },
+      { id: "session", title: "Session", area: [9, 7, 3, 5], children: <SessionPanel /> },
+      { id: "observation", title: "Agent View", modal: true, children: <ObservationPanel /> },
+      { id: "about", title: "About", modal: true, children: <AboutPanel /> },
     ],
     [world],
   );

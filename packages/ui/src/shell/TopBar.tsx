@@ -1,15 +1,16 @@
 import { type AgentStatus, AgentTopic, type ControllerState } from "@awp-demo/inspector";
 import { useConnection, useTopic } from "@awp-demo/inspector/react";
-import { ChevronDown, LayoutCellsLarge, LogoGithub, Moon, Sun } from "@gravity-ui/icons";
-import { Button, Dropdown, Label, Separator } from "@heroui/react";
+import { ChevronDown, LogoGithub, Moon, Sun, Xmark } from "@gravity-ui/icons";
+import { Button, Dropdown, Label, Modal, Separator } from "@heroui/react";
 import { useDemo } from "../context.tsx";
 import { DEMOS, REPO_URL } from "../demos.ts";
 import { TONE_CLASS, type Tone } from "../format.ts";
 import { IconButton } from "../primitives/IconButton.tsx";
 import { useTheme } from "../theme.ts";
-import type { PanelDef, WorkspaceApi } from "./Workspace.tsx";
+import { type PanelDef, PanelHeader } from "./Workspace.tsx";
 
-export function TopBar({ panels, api }: { panels: PanelDef[]; api: WorkspaceApi }) {
+/** The demo picker, live status, the buttons for modal panels, and theme and source links. */
+export function TopBar({ panels }: { panels: PanelDef[] }) {
   const { demo, world, agent } = useDemo();
   const worldConn = useConnection(world);
   const agentConn = useConnection(agent);
@@ -86,35 +87,9 @@ export function TopBar({ panels, api }: { panels: PanelDef[]; api: WorkspaceApi 
       </div>
 
       <div className="flex items-center gap-0.5 text-muted">
-        <Dropdown>
-          <IconButton label="Layout">
-            <LayoutCellsLarge className="size-4" />
-          </IconButton>
-          <Dropdown.Popover placement="bottom end">
-            <Dropdown.Menu
-              aria-label="Layout"
-              onAction={(key) => {
-                if (key === "reset") api.reset();
-                else if (api.state.minimized.includes(String(key))) api.restore(String(key));
-                else api.minimize(String(key));
-              }}
-            >
-              <Dropdown.Section>
-                {panels.map((p) => (
-                  <Dropdown.Item key={p.id} id={p.id} textValue={p.title}>
-                    <Label>{p.title}</Label>
-                    <span className="text-xs text-muted">{api.state.minimized.includes(p.id) ? "Hidden" : ""}</span>
-                  </Dropdown.Item>
-                ))}
-              </Dropdown.Section>
-              <Dropdown.Section>
-                <Dropdown.Item id="reset" textValue="Reset layout">
-                  <Label>Reset Layout</Label>
-                </Dropdown.Item>
-              </Dropdown.Section>
-            </Dropdown.Menu>
-          </Dropdown.Popover>
-        </Dropdown>
+        {panels.map((p) => (
+          <PanelModal key={p.id} panel={p} />
+        ))}
         <IconButton
           label={theme.resolved === "dark" ? "Light theme" : "Dark theme"}
           onPress={() => theme.set(theme.resolved === "dark" ? "light" : "dark")}
@@ -126,5 +101,37 @@ export function TopBar({ panels, api }: { panels: PanelDef[]; api: WorkspaceApi 
         </IconButton>
       </div>
     </header>
+  );
+}
+
+/** A panel that lives in a dialog, opened from its button in the top bar. */
+function PanelModal({ panel }: { panel: PanelDef }) {
+  return (
+    <Modal>
+      <Button variant="ghost" size="sm" className="font-medium">
+        {panel.title}
+      </Button>
+      <Modal.Backdrop>
+        <Modal.Container size="lg" scroll="inside">
+          {/* The panel's own header and edges, as in the grid, so its contents line up with the title. */}
+          <Modal.Dialog className="overflow-hidden p-0">
+            <PanelHeader
+              title={panel.title}
+              heading={
+                <Modal.Heading className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+                  {panel.title}
+                </Modal.Heading>
+              }
+              actions={
+                <IconButton label="Close" slot="close">
+                  <Xmark className="size-3.5" />
+                </IconButton>
+              }
+            />
+            <div className="relative h-[min(70vh,640px)] min-h-0 overflow-hidden">{panel.children}</div>
+          </Modal.Dialog>
+        </Modal.Container>
+      </Modal.Backdrop>
+    </Modal>
   );
 }

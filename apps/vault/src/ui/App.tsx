@@ -38,17 +38,14 @@ export function App({ world, agent }: { world: InspectorClient; agent: Inspector
         area: [0, 0, 6, 8],
         flush: true,
         stackedHeight: 420,
-        minWidth: 360,
-        minHeight: 280,
         actions: <WorldActions />,
         children: <WorldView />,
       },
-      { id: "activity", title: "Activity", area: [6, 0, 6, 8], minWidth: 340, children: <ActivityPanel /> },
+      { id: "activity", title: "Activity", area: [6, 0, 6, 8], children: <ActivityPanel /> },
       {
         id: "control",
         title: "Control",
         area: [0, 8, 3, 4],
-        minWidth: 280,
         children: (
           <ControlPanel
             extras={{
@@ -66,10 +63,10 @@ export function App({ world, agent }: { world: InspectorClient; agent: Inspector
           />
         ),
       },
-      { id: "wire", title: "Wire", area: [3, 8, 6, 4], minWidth: 360, children: <WirePanel /> },
-      { id: "session", title: "Session", area: [9, 8, 3, 4], minWidth: 260, children: <SessionPanel /> },
-      { id: "observation", title: "Agent View", area: [6, 2, 4, 6], hidden: true, children: <ObservationPanel /> },
-      { id: "about", title: "About", area: [3, 2, 5, 7], hidden: true, children: <AboutPanel /> },
+      { id: "wire", title: "Wire", area: [3, 8, 6, 4], children: <WirePanel /> },
+      { id: "session", title: "Session", area: [9, 8, 3, 4], children: <SessionPanel /> },
+      { id: "observation", title: "Agent View", modal: true, children: <ObservationPanel /> },
+      { id: "about", title: "About", modal: true, children: <AboutPanel /> },
     ],
     [],
   );

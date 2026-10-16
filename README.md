@@ -34,7 +34,7 @@ apps/<demo>/src/ui       the UI: world view and panel layout
 packages/world           WorldHost, a sans-IO AWP world written from the spec, and serveWorld
 packages/agent           the control mux, the Controller API, and LLM plumbing (AI SDK)
 packages/inspector       the contract between the processes and the UI, over WebSocket
-packages/ui              the shell: floating panels, and the Wire, Activity, Control, Session, Agent View, About panels
+packages/ui              the shell: a fixed grid of the Wire, Activity, Control, Session panels, with Agent View and About as dialogs
 ```
 
 A world is a `WorldDefinition`: a manifest, plus a simulation that steps, observes, and runs actions. `WorldHost` handles the protocol:

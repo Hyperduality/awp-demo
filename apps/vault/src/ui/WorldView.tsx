@@ -6,10 +6,14 @@ import type { VaultView } from "../shared/vault.ts";
 
 type Mode = "truth" | "agent";
 
+// Bands kept clear of the map: the stats and view switch above, the status message below.
+const TOP = 48;
+const BOTTOM = 44;
+
 function geometry(w: number, h: number, cols: number, rows: number) {
-  const size = Math.floor(Math.min((w - 32) / cols, (h - 72) / rows));
+  const size = Math.floor(Math.min((w - 32) / cols, (h - TOP - BOTTOM) / rows));
   const ox = Math.round((w - size * cols) / 2);
-  const oy = Math.round((h - size * rows) / 2 + 12);
+  const oy = Math.round(TOP + (h - TOP - BOTTOM - size * rows) / 2);
   return { size, ox, oy };
 }
 

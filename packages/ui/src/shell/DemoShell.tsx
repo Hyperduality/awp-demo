@@ -1,9 +1,9 @@
 import type { InspectorClient } from "@awp-demo/inspector/client";
 import { type DemoInfo, DemoProvider } from "../context.tsx";
 import { TopBar } from "./TopBar.tsx";
-import { type PanelDef, useWorkspace, Workspace } from "./Workspace.tsx";
+import { type PanelDef, Workspace } from "./Workspace.tsx";
 
-/** The frame every demo shares: a top bar and a workspace of floating panels. */
+/** The frame every demo shares: a top bar and a fixed grid of panels. */
 export function DemoShell(props: {
   demo: DemoInfo;
   world: InspectorClient;
@@ -12,19 +12,12 @@ export function DemoShell(props: {
 }) {
   return (
     <DemoProvider demo={props.demo} world={props.world} agent={props.agent}>
-      <Frame demoId={props.demo.id} panels={props.panels} />
+      <div className="flex h-full flex-col bg-background">
+        <TopBar panels={props.panels.filter((p) => p.modal)} />
+        <main className="min-h-0 flex-1">
+          <Workspace panels={props.panels} />
+        </main>
+      </div>
     </DemoProvider>
-  );
-}
-
-function Frame({ demoId, panels }: { demoId: string; panels: PanelDef[] }) {
-  const api = useWorkspace(demoId, panels);
-  return (
-    <div className="flex h-full flex-col bg-background">
-      <TopBar panels={panels} api={api} />
-      <main className="min-h-0 flex-1">
-        <Workspace panels={panels} api={api} />
-      </main>
-    </div>
   );
 }
