@@ -5,6 +5,7 @@ export interface CellState {
   ee: [number, number];
   moving: boolean;
   holding: string | null;
+  gripperWidth: number;
   beltMps: number;
   parcels: { id: string; color: string; x: number; z: number; on: string }[];
   stats: ScenePayload["stats"] | undefined;
@@ -20,6 +21,7 @@ export function readCell(ctx: ControlContext<unknown>): CellState | undefined {
     ee: proprio.ee_m,
     moving: proprio.moving,
     holding: grip.holding,
+    gripperWidth: grip.width_m,
     beltMps: Number(belt?.state.speed_mps ?? 0.06),
     parcels: scene.entities
       .filter((e) => e.class === "parcel")

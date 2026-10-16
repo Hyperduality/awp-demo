@@ -20,7 +20,7 @@ afterEach(async () => {
   await world?.close();
 });
 
-async function start(controllers: ConstructorParameters<typeof ControlMux>[0]) {
+async function start(controllers: ConstructorParameters<typeof ControlMux>[0], before?: () => void) {
   world = await serveWorld(sorter, { port: 0, token: TOKEN, log: () => {} });
   client = new AwpClient({
     url: world.url,
@@ -29,6 +29,7 @@ async function start(controllers: ConstructorParameters<typeof ControlMux>[0]) {
     consumesModalities: ["proprio/json", "text/event+json"],
   });
   await client.initialize();
+  before?.();
   await client.openSession("lockstep", {
     embodiments: ["arm_0", "gripper_0"],
     subscribe: ["proprio", "gripper_state", "scene"],
@@ -74,6 +75,17 @@ describe("sorter controllers", () => {
     await until(() => (world!.host.sim.view() as { stats: { sorted: number } }).stats.sorted >= 3, 30000);
     expect((world!.host.sim.view() as { stats: { wrong: number } }).stats.wrong).toBe(0);
   }, 40000);
+
+  it("the program opens a gripper left closed on nothing before picking", async () => {
+    const activity = await start([program as never] as ConstructorParameters<typeof ControlMux>[0], () => {
+      (world!.host.sim as unknown as { width: number }).width = 0;
+    });
+    const gripperAction = () =>
+      activity.find((e) => e.kind === "action" && (e.title === "grip" || e.title === "release"));
+    await until(() => gripperAction() !== undefined);
+    expect(gripperAction()?.title).toBe("release");
+    await until(() => (world!.host.sim.view() as { gripper: { width: number } }).gripper.width >= 0.08 - 1e-6);
+  });
 
   it("an LLM turn runs its tools against the world and streams into the activity log", async () => {
     const usage = {

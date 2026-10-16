@@ -45,6 +45,11 @@ export const program: Controller<Config> = {
       const cell = readCell(ctx);
       if (!cell) return ctx.nextObservation();
       if (cell.holding) return deliver(cell.holding);
+      // Another controller may have left the fingers closed on nothing; open them before picking.
+      if (cell.gripperWidth < CELL.gripperOpen - 1e-3) {
+        await done(gripper("release"));
+        return;
+      }
       const speed = ctx.config.speed_mps;
       const candidates = cell.parcels.filter((p) => p.on === "belt" && p.x > -0.86 && p.x < CELL.belt.x1 - 0.12);
       if (candidates.length === 0) {
