@@ -1,4 +1,4 @@
-import { actionTools, createLlmController } from "@awp-demo/agent/llm";
+import { actionTools, createLlmController, outcomeLine } from "@awp-demo/agent/llm";
 import { tool } from "ai";
 import { z } from "zod";
 import { CELL } from "../../shared/cell.ts";
@@ -26,11 +26,7 @@ export const sorterLlm = (overrides: Partial<Parameters<typeof createLlmControll
         observe: () => describeCell(ctx),
         embodimentFor: (t) => (t === "grip" || t === "release" ? "gripper_0" : "arm_0"),
         format: (o) =>
-          [
-            `${o.action}: ${o.state}${o.reason ? ` (${o.reason}${o.detail ? `: ${o.detail}` : ""})` : ""}`,
-            o.meanwhile?.length ? `Meanwhile: ${o.meanwhile.join("; ")}` : "",
-            String(o.observation),
-          ]
+          [outcomeLine(o), o.meanwhile?.length ? `Meanwhile: ${o.meanwhile.join("; ")}` : "", String(o.observation)]
             .filter(Boolean)
             .join("\n"),
       }),

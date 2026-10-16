@@ -159,4 +159,115 @@ describe("vault llm", () => {
     expect(prompt.match(/older map omitted/g)).toHaveLength(1);
     expect(prompt.match(/Map \(x across/g)).toHaveLength(1);
   });
+
+  /** A vault session driven by the LLM controller alone, with one scripted model reply per call. */
+  async function scripted(replies: ((signal: AbortSignal | undefined) => LanguageModelV4StreamResult)[]) {
+    world = await serveWorld(vault, { port: 0, token: "vault-test-token-0000", log: () => {} });
+    client = new AwpClient({
+      url: world.url,
+      token: "vault-test-token-0000",
+      agent: { name: "t", version: "0", vendor: "t" },
+      consumesModalities: ["text/event+json"],
+    });
+    await client.initialize();
+    await client.openSession("lockstep", { embodiment: "explorer_0", subscribe: ["map", "status"], admin: ["reset"] });
+    let n = 0;
+    const model = new MockLanguageModelV4({ doStream: async (o) => replies[n++]!(o.abortSignal) });
+    const activity: ActivityEntry[] = [];
+    const m = new ControlMux(
+      [vaultLlm({ model: () => model })] as never,
+      {
+        activity: (e) => {
+          const i = activity.findIndex((a) => a.id === e.id);
+          if (i >= 0) activity[i] = e;
+          else activity.push(e);
+        },
+        controllers: () => {},
+        changed: () => {},
+      },
+      { rateHz: 0 },
+    );
+    mux = m;
+    m.attach(client);
+    const until = async (cond: () => boolean, what: string) => {
+      const t0 = Date.now();
+      while (!cond()) {
+        if (Date.now() - t0 > 10000) throw new Error(`timed out: ${what}`);
+        await new Promise((r) => setTimeout(r, 20));
+      }
+    };
+    const prompt = (i: number) => JSON.stringify(model.doStreamCalls[i]!.prompt);
+    return { mux: m, client, model, activity, until, prompt };
+  }
+  const usage = {
+    inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 },
+    outputTokens: { total: 1, text: 1, reasoning: 0 },
+  };
+  const call = (name: string, input: unknown) => (): LanguageModelV4StreamResult => ({
+    stream: convertArrayToReadableStream([
+      { type: "stream-start", warnings: [] },
+      { type: "tool-call", toolCallId: `${name}-${Math.random()}`, toolName: name, input: JSON.stringify(input) },
+      { type: "finish", finishReason: { unified: "tool-calls", raw: undefined }, usage },
+    ]),
+  });
+  /** A model call that thinks until it is aborted. */
+  const hang = (signal: AbortSignal | undefined): LanguageModelV4StreamResult => ({
+    stream: new ReadableStream({
+      start(c) {
+        c.enqueue({ type: "stream-start", warnings: [] });
+        signal?.addEventListener("abort", () => c.error(new DOMException("aborted", "AbortError")));
+      },
+    }),
+  });
+
+  it("remembers a stopped turn and hears about a reset", async () => {
+    const t = await scripted([call("move", { direction: "east" }), hang, call("finish", { summary: "Done." })]);
+    t.mux.message("llm", "Walk east.");
+    await t.until(() => t.model.doStreamCalls.length === 2, "second model call");
+    t.mux.interrupt("llm");
+    await t.until(() => t.activity.some((e) => e.title === "Stopped"), "stopped");
+    await t.client.reset();
+    await t.until(() => t.activity.some((e) => e.title === "World reset"), "reset event");
+    t.mux.message("llm", "Try again.");
+    await t.until(() => t.activity.some((e) => e.title === "Done."), "finish");
+
+    const prompt = t.prompt(2);
+    expect(prompt).toContain("Walk east.");
+    // The finished step of the stopped turn stays in memory, followed by how that turn ended.
+    expect(prompt).toContain("move: completed");
+    expect(prompt).toContain("The operator stopped your last turn.");
+    expect(prompt).toContain("Since your last turn:");
+    expect(prompt).toContain("world: World reset");
+  }, 20000);
+
+  it("stops during an action even while the clock is paused", async () => {
+    const t = await scripted([call("walk_to", { cell: [1, 4] }), call("finish", { summary: "Done." })]);
+    t.mux.setPaused(true);
+    t.mux.message("llm", "Walk to (1, 4).");
+    await t.until(() => t.activity.some((e) => e.kind === "action" && e.state === "accepted"), "walk accepted");
+    t.mux.interrupt("llm");
+    await t.until(() => t.activity.some((e) => e.title === "Stopped"), "stopped while paused");
+    t.mux.setPaused(false);
+    await t.until(() => t.activity.some((e) => e.kind === "action" && e.state === "cancelled"), "walk cancelled");
+    t.mux.message("llm", "Where are you?");
+    await t.until(() => t.activity.some((e) => e.title === "Done."), "finish");
+
+    expect(t.prompt(1)).toContain("The operator stopped your last turn. Your actions in it:");
+    expect(t.prompt(1)).toContain("walk_to cell [1, 4] → cancelled");
+  }, 20000);
+
+  it("tells the model when its last turn hit the step limit", async () => {
+    const t = await scripted([
+      call("move", { direction: "east" }),
+      call("move", { direction: "east" }),
+      call("finish", { summary: "Done." }),
+    ]);
+    t.mux.configure("llm", { maxSteps: 2 });
+    t.mux.message("llm", "Keep walking east.");
+    await t.until(() => t.activity.some((e) => e.title === "Step limit reached"), "step limit");
+    t.mux.message("llm", "Continue.");
+    await t.until(() => t.activity.some((e) => e.title === "Done."), "finish");
+
+    expect(t.prompt(2)).toContain("Your last turn reached the step limit of 2 model calls before you called finish.");
+  }, 20000);
 });

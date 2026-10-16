@@ -207,7 +207,7 @@ export const LlmConfig = z.object({
   model: z.string().min(1).default("claude-sonnet-5-5"),
   apiKey: z.string().optional().meta({ "x-secret": true }),
   baseUrl: z.string().optional(),
-  maxSteps: z.number().int().min(1).max(200).default(40),
+  maxSteps: z.number().int().min(1).max(200).default(100),
 });
 export type LlmConfig = z.infer<typeof LlmConfig>;
 

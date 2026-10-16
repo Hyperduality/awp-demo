@@ -7,7 +7,7 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { LlmConfig, PROVIDER_LABELS } from "@awp-demo/inspector";
-import { AwpError, type WorldManifest } from "@hyperduality/awp";
+import { type ActionRecord, AwpError, type WorldManifest } from "@hyperduality/awp";
 import {
   hasToolCall,
   isStepCount,
@@ -22,7 +22,7 @@ import {
 } from "ai";
 import { z } from "zod";
 import type { ControlContext, Controller, ControllerInstance, HistoryEntry } from "./controller.ts";
-import { summarize } from "./mux.ts";
+import { describeEvent, summarize } from "./mux.ts";
 
 export { LlmConfig };
 
@@ -110,14 +110,21 @@ export function actionTools<C>(ctx: ControlContext<C>, opts: ActionToolOptions):
     tools[type] = tool({
       description: opts.describe?.[type] ?? decl.description ?? `The world's ${type} action.`,
       inputSchema: jsonSchema(resolveDefs(m, decl.params_schema)),
-      execute: async (input: unknown) => {
-        const before = ctx.history(1)[0]?.ts ?? 0;
+      execute: async (input: unknown, { abortSignal }) => {
+        const before = reported.get(ctx) ?? lastSeq(ctx);
         const params = (input ?? {}) as Record<string, unknown>;
+        const entry: TurnAction = { type, params };
+        turnActions.get(ctx)?.push(entry);
         let outcome: ActionOutcome;
         try {
           const embodiment = opts.embodimentFor?.(type);
-          const rec = await ctx.submit(type, params, embodiment ? { embodiment } : {});
-          await ctx.settle(rec, { maxTicks: opts.maxTicks ?? 400 });
+          // Stop ends the wait for authority and for the action; the mux cancels the action on release.
+          const rec = await ctx.submit(type, params, {
+            ...(embodiment ? { embodiment } : {}),
+            ...(abortSignal ? { signal: abortSignal } : {}),
+          });
+          entry.rec = rec;
+          await ctx.settle(rec, { maxTicks: opts.maxTicks ?? 400, ...(abortSignal ? { signal: abortSignal } : {}) });
           outcome = { action: type, state: rec.state, reason: rec.reason, detail: rec.detail };
         } catch (e) {
           outcome = {
@@ -126,11 +133,10 @@ export function actionTools<C>(ctx: ControlContext<C>, opts: ActionToolOptions):
             reason: e instanceof AwpError ? e.errorName : "error",
             detail: e instanceof AwpError ? e.detail : e instanceof Error ? e.message : String(e),
           };
+          entry.rejected = outcome.detail ?? outcome.reason;
         }
-        const meanwhile = ctx
-          .history(50)
-          .filter((h) => h.ts > before && h.source !== ctx.id)
-          .map(describeHistory);
+        const meanwhile = since(ctx, before);
+        reported.set(ctx, lastSeq(ctx));
         if (meanwhile.length > 0) outcome.meanwhile = meanwhile;
         outcome.observation = opts.observe();
         return outcome;
@@ -143,6 +149,61 @@ export function actionTools<C>(ctx: ControlContext<C>, opts: ActionToolOptions):
 
 export function describeHistory(h: HistoryEntry): string {
   return `${h.source}: ${h.type} ${summarize(h.params)} → ${h.state}${h.reason ? ` (${h.reason})` : ""}`;
+}
+
+/** The newest sequence number across actions and world events. */
+function lastSeq(ctx: ControlContext<unknown>): number {
+  return Math.max(ctx.history(1)[0]?.seq ?? 0, ctx.events(1)[0]?.seq ?? 0);
+}
+
+/** Per controller context: the last sequence number already told to the model. */
+const reported = new WeakMap<ControlContext<unknown>, number>();
+
+/** An action a turn submitted; `rec` stays live, so its state is current when read. */
+interface TurnAction {
+  type: string;
+  params: Record<string, unknown>;
+  rec?: ActionRecord;
+  rejected?: string | undefined;
+}
+
+/** How a turn ended, when it did not end on its own. */
+interface Ending {
+  text: string;
+  actions?: TurnAction[];
+}
+
+/** Per controller context: the actions of the turn in progress. */
+const turnActions = new WeakMap<ControlContext<unknown>, TurnAction[]>();
+
+function describeTurnAction(a: TurnAction): string {
+  const end = a.rec
+    ? `${a.rec.state}${a.rec.reason ? ` (${a.rec.reason})` : ""}`
+    : `rejected${a.rejected ? ` (${a.rejected})` : ""}`;
+  return `${a.type} ${summarize(a.params)} → ${end}`;
+}
+
+/** Other controllers' actions and world events after `seq`, oldest first, newest 20 at most. */
+function since(ctx: ControlContext<unknown>, seq: number): string[] {
+  const lines = [
+    ...ctx
+      .history(500)
+      .filter((h) => h.seq > seq && h.source !== ctx.id)
+      .map((h) => ({ seq: h.seq, line: describeHistory(h) })),
+    ...ctx
+      .events(100)
+      .filter((e) => e.seq > seq)
+      .map((e) => ({ seq: e.seq, line: `world: ${describeEvent(e)}` })),
+  ]
+    .sort((a, b) => a.seq - b.seq)
+    .map((x) => x.line);
+  return lines.length > 20 ? [`(${lines.length - 20} earlier omitted)`, ...lines.slice(-20)] : lines;
+}
+
+/** An outcome's first line, e.g. "walk_to: cancelled (world_reset)" or "move: failed (blocked: a wall)". */
+export function outcomeLine(o: ActionOutcome): string {
+  const why = [o.reason, o.detail].filter(Boolean).join(": ");
+  return `${o.action}: ${o.state}${why ? ` (${why})` : ""}`;
 }
 
 function defaultFormat(o: ActionOutcome): string {
@@ -212,7 +273,11 @@ export function createLlmController<C extends LlmConfig = LlmConfig>(opts: LlmCo
       const messages: ModelMessage[] = [];
       let turn: AbortController | undefined;
       let queued: string | undefined;
-      let seenHistory = 0;
+      // How the last turn ended, when it did not end on its own; told to the model with the next message.
+      // `actions` is set when none of the turn reached memory; their states are read when the note is sent.
+      let ending: Ending | undefined;
+      // What happened before this controller existed is not news to it; it can look.
+      reported.set(ctx, lastSeq(ctx));
 
       const run = async (text: string) => {
         if (turn) {
@@ -228,17 +293,35 @@ export function createLlmController<C extends LlmConfig = LlmConfig>(opts: LlmCo
         }
         turn = new AbortController();
         const signal = AbortSignal.any([turn.signal, ctx.signal]);
-        const others = ctx
-          .history(100)
-          .slice(seenHistory)
-          .filter((h) => h.source !== ctx.id)
-          .map(describeHistory);
-        seenHistory = ctx.history(100).length;
-        const content =
-          others.length > 0
-            ? `${text}\n\nSince your last turn, other controllers acted:\n${others.map((o) => `- ${o}`).join("\n")}`
-            : text;
+        const turnStart = lastSeq(ctx);
+        const others = since(ctx, reported.get(ctx) ?? 0);
+        reported.set(ctx, turnStart);
+        const note =
+          ending &&
+          `(${ending.text}${ending.actions?.length ? ` Your actions in it:\n${ending.actions.map((a) => `- ${describeTurnAction(a)}`).join("\n")}` : ""})`;
+        const content = [
+          note,
+          text,
+          others.length > 0 && `Since your last turn:\n${others.map((o) => `- ${o}`).join("\n")}`,
+        ]
+          .filter(Boolean)
+          .join("\n\n");
+        ending = undefined;
         messages.push({ role: "user", content });
+        const kept = messages.length;
+        const actions: TurnAction[] = [];
+        turnActions.set(ctx, actions);
+        const end = (text: string) => {
+          ending = { text };
+        };
+        const stopped = () => {
+          ctx.log({ kind: "system", title: "Stopped" });
+          end(
+            queued !== undefined
+              ? "The operator interrupted your last turn with this message."
+              : "The operator stopped your last turn.",
+          );
+        };
         ctx.engage();
         ctx.status("Thinking");
         try {
@@ -251,15 +334,30 @@ export function createLlmController<C extends LlmConfig = LlmConfig>(opts: LlmCo
             ...(opts.prepareStep ? { prepareStep: opts.prepareStep } : {}),
           });
           const result = await agent.stream({ messages, abortSignal: signal });
-          await streamToActivity(ctx, result.fullStream);
+          // An abort or a model error ends the stream rather than throwing; the steps that finished are
+          // still in responseMessages, and stay in memory.
+          const summary = await streamToActivity(ctx, result.fullStream);
           messages.push(...(await result.responseMessages));
+          if (signal.aborted) stopped();
+          else if (summary.failure) end(`Your last turn ended with an error: ${summary.failure}`);
+          else if (summary.endedOnToolCalls && !summary.finished && summary.steps >= config.maxSteps) {
+            ctx.log({ kind: "system", title: "Step limit reached", detail: `${config.maxSteps} steps` });
+            end(`Your last turn reached the step limit of ${config.maxSteps} model calls before you called finish.`);
+          }
         } catch (e) {
-          if (!signal.aborted)
-            ctx.log({ kind: "error", title: "Model call failed", detail: e instanceof Error ? e.message : String(e) });
-          else ctx.log({ kind: "system", title: "Stopped" });
-          // Keep the transcript well-formed: drop a dangling user turn with no answer.
-          if (messages.at(-1)?.role === "user") messages.pop();
+          // An abort during a tool call throws once the tool returns.
+          if (signal.aborted) stopped();
+          else {
+            const error = e instanceof Error ? e.message : String(e);
+            ctx.log({ kind: "error", title: "Model call failed", detail: error });
+            end(`Your last turn ended with an error: ${error}`);
+          }
         } finally {
+          // Nothing of the turn reached memory (it threw): the note lists its actions instead.
+          // (`end` assigns `ending` inside closures, which TypeScript's narrowing does not see.)
+          const ended = ending as Ending | undefined;
+          if (ended && messages.length === kept) ended.actions = actions;
+          turnActions.delete(ctx);
           turn = undefined;
           ctx.status(undefined);
           ctx.release();
@@ -289,8 +387,26 @@ type StreamPart =
   | { type: "error"; error: unknown }
   | { type: string };
 
+/** How a streamed turn went, for telling the model next time. */
+export interface StreamSummary {
+  /** The model error that ended the stream, if one did. */
+  failure: string | undefined;
+  /** Model calls made. */
+  steps: number;
+  /** The model called `finish`. */
+  finished: boolean;
+  /** The last model call asked for tools, so the loop was cut off rather than ending on a reply. */
+  endedOnToolCalls: boolean;
+}
+
 /** Streams reasoning and text into upserted activity entries; tool calls appear as their actions do. */
-export async function streamToActivity<C>(ctx: ControlContext<C>, stream: AsyncIterable<unknown>): Promise<void> {
+export async function streamToActivity<C>(
+  ctx: ControlContext<C>,
+  stream: AsyncIterable<unknown>,
+): Promise<StreamSummary> {
+  let failure: string | undefined;
+  let finished = false;
+  let endedOnToolCalls = false;
   // Entries are created on the first non-empty delta, so empty reasoning blocks leave no trace.
   const buffers = new Map<string, { entry: string | undefined; text: string; kind: "thought" | "message" }>();
   let step = 0;
@@ -300,6 +416,7 @@ export async function streamToActivity<C>(ctx: ControlContext<C>, stream: AsyncI
     switch (part.type) {
       case "start-step":
         step += 1;
+        endedOnToolCalls = false;
         break;
       case "reasoning-start":
       case "text-start": {
@@ -330,7 +447,9 @@ export async function streamToActivity<C>(ctx: ControlContext<C>, stream: AsyncI
       }
       case "tool-call": {
         const p = part as { toolName: string; input: unknown };
+        endedOnToolCalls = true;
         if (p.toolName === "finish") {
+          finished = true;
           ctx.log({
             kind: "message",
             title: String((p.input as { summary?: string })?.summary ?? "Done."),
@@ -350,13 +469,11 @@ export async function streamToActivity<C>(ctx: ControlContext<C>, stream: AsyncI
       }
       case "error": {
         const p = part as { error: unknown };
-        ctx.log({
-          kind: "error",
-          title: "Model error",
-          detail: p.error instanceof Error ? p.error.message : String(p.error),
-        });
+        failure = p.error instanceof Error ? p.error.message : String(p.error);
+        ctx.log({ kind: "error", title: "Model error", detail: failure });
         break;
       }
     }
   }
+  return { failure, steps: step, finished, endedOnToolCalls };
 }
