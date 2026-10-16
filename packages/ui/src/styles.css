@@ -31,14 +31,3 @@ body {
 .tnum {
   font-variant-numeric: tabular-nums;
 }
-
-/* The canvas behind the floating panels: flat, with the faintest structure. */
-.workspace-canvas {
-  background-color: var(--background);
-}
-
-.panel-resize {
-  position: absolute;
-  z-index: 2;
-  touch-action: none;
-}
