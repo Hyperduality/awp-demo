@@ -47,15 +47,28 @@ export interface SubmitOptions {
   embodiment?: string;
   preempt?: "queue" | "replace" | "blend" | "reject";
   deadlineMs?: number;
+  /** Stops waiting for authority when aborted, besides the controller's own signal. */
+  signal?: AbortSignal;
 }
 
 export interface HistoryEntry {
+  /** Orders actions and world events together; increases by one per entry. */
+  seq: number;
   actionId: string;
   source: string;
   type: string;
   params: Record<string, unknown>;
   state: string;
   reason?: string | undefined;
+  ts: number;
+}
+
+/** A world event (a reset, an e-stop, a safe state) as the session reported it. */
+export interface WorldEventEntry {
+  /** Shares its sequence with `HistoryEntry.seq`. */
+  seq: number;
+  event: string;
+  detail?: Record<string, unknown> | undefined;
   ts: number;
 }
 
@@ -91,13 +104,18 @@ export interface ControlContext<C = unknown> {
   cancel(actionId: string): Promise<void>;
   /** One setpoint on a command channel (streaming actions). */
   command(channel: string, payload: unknown): Promise<void>;
-  /** Wait for an action to end, letting time pass in lockstep. */
-  settle(rec: ActionRecord, opts?: { maxTicks?: number; timeoutMs?: number }): Promise<ActionRecord>;
+  /** Wait for an action to end, letting time pass in lockstep; `signal` stops the wait early. */
+  settle(
+    rec: ActionRecord,
+    opts?: { maxTicks?: number; timeoutMs?: number; signal?: AbortSignal },
+  ): Promise<ActionRecord>;
   /** Let time pass: ticks in lockstep, ms in streaming (either is converted). */
   wait(opts: { ticks?: number; ms?: number }): Promise<void>;
 
   /** Recent actions by every controller, oldest first. */
   history(limit?: number): HistoryEntry[];
+  /** Recent world events, oldest first. */
+  events(limit?: number): WorldEventEntry[];
   /** Adds (or, with an id, upserts) an activity entry from this controller; returns its id. */
   log(entry: LogInput): string;
   /** A short present-tense status for the UI, or undefined. */

@@ -1,5 +1,5 @@
 import type { ControlContext } from "@awp-demo/agent";
-import { actionTools, createLlmController, type LlmConfig } from "@awp-demo/agent/llm";
+import { actionTools, createLlmController, type LlmConfig, outcomeLine } from "@awp-demo/agent/llm";
 import { tool } from "ai";
 import { z } from "zod";
 import { Knowledge } from "./knowledge.ts";
@@ -36,6 +36,7 @@ export const vaultLlm = (overrides: Partial<Parameters<typeof createLlmControlle
         "You see three tiles around you and nothing behind walls or closed doors. The map shows everything you have seen.",
         "Keys open doors of their colour. The gem lies behind locked doors. The exit (E) only opens for whoever carries the gem.",
         "Use walk_to for travel over tiles you have seen; it fails if no known path exists, so explore toward ? tiles first.",
+        "Every tool call costs one of a limited number of steps: walk_to the farthest seen tile that gets you closer, and use move only for a single step into the unknown.",
         "interact works on your own tile or one next to you: stand on an item to pick it up, stand beside a door or the exit to use it.",
         "The world is lockstep: nothing moves while you think. Keep thoughts brief. Call finish once you have escaped.",
       ].join("\n"),
@@ -44,11 +45,7 @@ export const vaultLlm = (overrides: Partial<Parameters<typeof createLlmControlle
         types: ["move", "walk_to", "interact", "drop"],
         observe: () => describe(ctx),
         format: (o) =>
-          [
-            `${o.action}: ${o.state}${o.detail ? ` (${o.detail})` : ""}`,
-            o.meanwhile?.length ? `Meanwhile: ${o.meanwhile.join("; ")}` : "",
-            String(o.observation),
-          ]
+          [outcomeLine(o), o.meanwhile?.length ? `Meanwhile: ${o.meanwhile.join("; ")}` : "", String(o.observation)]
             .filter(Boolean)
             .join("\n"),
       }),

@@ -25,6 +25,7 @@ import {
   type LogInput,
   NotInControlError,
   type SubmitOptions,
+  type WorldEventEntry,
 } from "./controller.ts";
 
 export interface MuxOutputs {
@@ -72,6 +73,8 @@ export class ControlMux {
   private tickListeners = new Set<() => void>();
   private readonly tracked = new Map<string, Tracked>();
   private readonly historyLog: HistoryEntry[] = [];
+  private readonly eventLog: WorldEventEntry[] = [];
+  private seq = 0;
   private stepRequests = 0;
   private poke: (() => void) | undefined;
   private pacing = false;
@@ -138,6 +141,8 @@ export class ControlMux {
     };
     const onStatus = (rec: ActionRecord) => this.onStatus(rec);
     const onEvent = (e: { event: string; detail?: Record<string, unknown> }) => {
+      this.eventLog.push({ seq: ++this.seq, event: e.event, detail: e.detail, ts: Date.now() });
+      if (this.eventLog.length > 100) this.eventLog.splice(0, this.eventLog.length - 100);
       this.emit({
         source: "world",
         kind: "event",
@@ -381,7 +386,7 @@ export class ControlMux {
         mux.setEngaged(slot, true);
         await mux.awaitAuthority(slot, signal);
       },
-      submit: (type, params, opts) => mux.submit(slot, signal, type, params, opts),
+      submit: (type, params, opts) => mux.submit(slot, either(signal, opts?.signal), type, params, opts),
       cancel: async (actionId) => {
         await mux.client?.cancel(actionId);
       },
@@ -389,9 +394,10 @@ export class ControlMux {
         if (mux.authority !== id) return;
         await mux.client?.sendCommandFrame(channel, new TextEncoder().encode(JSON.stringify(payload)));
       },
-      settle: (rec, opts) => mux.settle(rec, signal, opts),
+      settle: (rec, opts) => mux.settle(rec, either(signal, opts?.signal), opts),
       wait: (opts) => mux.wait(signal, opts),
       history: (limit = 50) => mux.historyLog.slice(-limit),
+      events: (limit = 20) => mux.eventLog.slice(-limit),
       log: (entry: LogInput) => mux.emit({ ...entry, source: id }),
       status: (text) => {
         if (slot.status === text) return;
@@ -405,7 +411,7 @@ export class ControlMux {
     while (this.authority !== slot.def.id) {
       if (signal.aborted) throw new DOMException("stopped", "AbortError");
       if (!slot.engaged) throw new NotInControlError(slot.def.id);
-      await new Promise<void>((r) => slot.authorityWaiters.push(r));
+      await Promise.race([new Promise<void>((r) => slot.authorityWaiters.push(r)), abortPromise(signal)]);
     }
   }
 
@@ -490,8 +496,8 @@ export class ControlMux {
     }
   }
 
-  private remember(h: HistoryEntry): void {
-    this.historyLog.push(h);
+  private remember(h: Omit<HistoryEntry, "seq">): void {
+    this.historyLog.push({ ...h, seq: ++this.seq });
     if (this.historyLog.length > 500) this.historyLog.splice(0, this.historyLog.length - 500);
   }
 
@@ -652,6 +658,10 @@ export class ControlMux {
   }
 }
 
+function either(a: AbortSignal, b: AbortSignal | undefined): AbortSignal {
+  return b ? AbortSignal.any([a, b]) : a;
+}
+
 function abortPromise(signal: AbortSignal): Promise<void> {
   return new Promise((resolve) => {
     if (signal.aborted) resolve();
@@ -677,6 +687,12 @@ function formatValue(v: unknown): string {
   if (Array.isArray(v)) return `[${v.map(formatValue).join(", ")}]`;
   if (v && typeof v === "object") return JSON.stringify(v);
   return String(v);
+}
+
+/** A world event in one line, e.g. "World reset (initiator operator · kind reset)". */
+export function describeEvent(e: { event: string; detail?: Record<string, unknown> | undefined }): string {
+  const detail = e.detail ? describeDetail(e.detail) : undefined;
+  return `${EVENT_TITLES[e.event] ?? e.event}${detail ? ` (${detail})` : ""}`;
 }
 
 function describeDetail(d: Record<string, unknown>): string | undefined {
