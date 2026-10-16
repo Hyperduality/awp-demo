@@ -62,6 +62,14 @@ export function hasCredentials(config: LlmConfig): boolean {
   return config.provider === "openai-compatible" ? Boolean(config.baseUrl) : Boolean(envKey && process.env[envKey]);
 }
 
+/** What the operator has to add before the model can be called, or undefined. */
+export function missingCredentials(config: LlmConfig): string | undefined {
+  if (hasCredentials(config)) return undefined;
+  return config.provider === "openai-compatible"
+    ? "Add a base URL in the LLM settings."
+    : `Add a ${config.provider} key in the LLM settings.`;
+}
+
 export interface ActionOutcome {
   action: string;
   state: string;
@@ -195,6 +203,7 @@ export function createLlmController<C extends LlmConfig = LlmConfig>(opts: LlmCo
     description: opts.description,
     config: (opts.config ?? LlmConfig) as z.ZodType<C>,
     enabled: opts.enabled ?? true,
+    unavailable: (config) => (opts.model ? undefined : missingCredentials(config)),
     create(ctx): ControllerInstance<C> {
       const messages: ModelMessage[] = [];
       let turn: AbortController | undefined;
@@ -208,8 +217,9 @@ export function createLlmController<C extends LlmConfig = LlmConfig>(opts: LlmCo
           return;
         }
         const config = ctx.config;
-        if (!opts.model && !hasCredentials(config)) {
-          ctx.log({ kind: "error", title: "No API key", detail: `Add a ${config.provider} key in the LLM settings.` });
+        const missing = opts.model ? undefined : missingCredentials(config);
+        if (missing) {
+          ctx.log({ kind: "error", title: "No API key", detail: missing });
           return;
         }
         turn = new AbortController();
