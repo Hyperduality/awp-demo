@@ -141,6 +141,64 @@ describe("streaming gridworld", () => {
     await c.close();
   });
 
+  it("activates a session with nothing subscribed before its first admission (AWP-CTL-008)", async () => {
+    const w = await start("streaming");
+    const trace: { dir: string; m: { params?: { status_seq?: number }; result?: { status_seq?: number } } }[] = [];
+    const c = client(w.url, trace as unknown[]);
+    await c.initialize();
+    await c.openSession("streaming", { embodiment: "avatar_0", subscribe: [] });
+    const rec = await c.submit("walk_to", { cell: [1, 0] });
+    await rec.settled();
+    const seqs = trace
+      .filter((t) => t.dir === "in")
+      .map((t) => t.m.params?.status_seq ?? t.m.result?.status_seq)
+      .filter((n): n is number => typeof n === "number" && n > 0);
+    expect(seqs).toEqual([...seqs].sort((a, b) => a - b));
+    expect(rec.violations).toEqual([]);
+    await c.close();
+  });
+
+  it("refuses an intent on a stale basis or past its validity (AWP-SAF-013)", async () => {
+    world = await serveWorld(gridworld("streaming", { maxBasisAgeMs: 300 }), {
+      port: 0,
+      token: TOKEN,
+      log: (l) => problems.push(l),
+    });
+    const c = client(world.url);
+    await c.initialize();
+    await c.openSession("streaming", { embodiment: "avatar_0", subscribe: ["grid_view"] });
+    const old = await c.freshFrame("grid_view");
+    await new Promise((r) => setTimeout(r, 450));
+    const stale = await c.submit("walk_to", { cell: [2, 0] }, { basis: old }).catch((e: unknown) => e);
+    expect(stale).toBeInstanceOf(AwpError);
+    expect((stale as AwpError).errorName).toBe("AWP_STALE_INTENT");
+    expect((stale as AwpError).retryable).toBe(true);
+    const fresh = await c.submit("walk_to", { cell: [2, 0] }, { basis: await c.freshFrame("grid_view") });
+    expect(fresh.state).not.toBe("rejected");
+    await fresh.settled();
+    expect(fresh.state).toBe("completed");
+    await c.close();
+  });
+
+  it("rejects a queued intent whose validity passed while it waited (AWP-SAF-013)", async () => {
+    world = await serveWorld(gridworld("streaming", { maxBasisAgeMs: 5000 }), {
+      port: 0,
+      token: TOKEN,
+      log: (l) => problems.push(l),
+    });
+    const c = client(world.url);
+    await c.initialize();
+    await c.openSession("streaming", { embodiment: "avatar_0", subscribe: ["grid_view"] });
+    const first = await c.submit("walk_to", { cell: [12, 0] }, { preempt: "queue" });
+    const waiting = await c.submit("walk_to", { cell: [0, 0] }, { preempt: "queue", validForMs: 100 });
+    expect(waiting.state).toBe("queued");
+    await waiting.settled();
+    expect(first.state).toBe("completed");
+    expect(waiting.state).toBe("rejected");
+    expect(waiting.reason).toBe("stale_intent");
+    await c.close();
+  });
+
   it("refuses a missing credential", async () => {
     const w = await start("streaming");
     const c = new AwpClient({ url: w.url, agent: { name: "x", version: "0", vendor: "x" }, consumesModalities: [] });

@@ -3,8 +3,10 @@
  *
  * Arbitration: the highest-priority enabled controller that is engaged (or pinned by the operator)
  * holds authority. On a handoff the mux cancels the previous holder's live actions, so the world's
- * own lifecycle shows the change. In lockstep the mux also owns time: it advances while the
- * authority wants time to flow, and never while an `on-wait` controller is thinking.
+ * own lifecycle shows the change; a mux set to `inherit` leaves them running for the new holder to
+ * keep or replace instead. In lockstep the mux also owns time: it advances while the authority
+ * wants time to flow, and never while an `on-wait` controller is thinking. In streaming, on a client
+ * whose heartbeat is manual, it owns the heartbeat: it pings while the holder shows life.
  */
 import { type ActivityEntry, type ControllerState, REDACTED } from "@awp-demo/inspector";
 import {
@@ -38,6 +40,9 @@ interface Slot {
   def: Controller<unknown>;
   priority: number;
   time: "continuous" | "on-wait";
+  liveness: "auto" | "intent";
+  /** Called `alive()` since the last heartbeat. */
+  alive: boolean;
   enabled: boolean;
   engaged: boolean;
   pinned: boolean;
@@ -55,6 +60,16 @@ interface Tracked {
   rec: ActionRecord;
   type: string;
   params: Record<string, unknown>;
+  embodiment: string | undefined;
+  basisAgeMs: number | undefined;
+}
+
+export interface MuxOptions {
+  /** Lockstep pace. */
+  rateHz?: number;
+  paused?: boolean;
+  /** What a handoff does to the previous holder's live actions (default `cancel`). */
+  handoff?: "cancel" | "inherit";
 }
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -64,6 +79,9 @@ export class ControlMux {
   manifest: WorldManifest | undefined;
   authority: string | null = null;
   readonly clock = { paused: false, rateHz: 20, waiting: 0 };
+  readonly handoff: "cancel" | "inherit";
+  /** Wall-clock ms of the last completed heartbeat exchange. */
+  heartbeatAt: number | undefined;
 
   private readonly slots = new Map<string, Slot>();
   private readonly out: MuxOutputs;
@@ -84,11 +102,13 @@ export class ControlMux {
   private lastTickTs: number | undefined;
   private entryCounter = 0;
   private detachers: (() => void)[] = [];
+  private heartbeatTimer: NodeJS.Timeout | undefined;
 
-  constructor(controllers: Controller<unknown>[], out: MuxOutputs, clock?: { rateHz?: number; paused?: boolean }) {
+  constructor(controllers: Controller<unknown>[], out: MuxOutputs, options: MuxOptions = {}) {
     this.out = out;
-    if (clock?.rateHz !== undefined) this.clock.rateHz = clock.rateHz;
-    if (clock?.paused !== undefined) this.clock.paused = clock.paused;
+    if (options.rateHz !== undefined) this.clock.rateHz = options.rateHz;
+    if (options.paused !== undefined) this.clock.paused = options.paused;
+    this.handoff = options.handoff ?? "cancel";
     for (const def of controllers) {
       const schema = z.toJSONSchema(def.config, { io: "input", unrepresentable: "any" }) as {
         properties?: Record<string, { "x-secret"?: boolean }>;
@@ -102,6 +122,8 @@ export class ControlMux {
         def,
         priority: def.priority ?? DEFAULT_PRIORITY[def.kind],
         time: def.time ?? (def.kind === "llm" ? "on-wait" : "continuous"),
+        liveness: def.liveness ?? "auto",
+        alive: false,
         enabled: def.enabled ?? true,
         engaged: false,
         pinned: false,
@@ -151,13 +173,18 @@ export class ControlMux {
         data: e,
       });
     };
+    const onClock = () => {
+      this.heartbeatAt = Date.now();
+    };
     client.on("frame", onFrame);
     client.on("status", onStatus);
     client.on("event", onEvent);
+    client.on("clock", onClock);
     this.detachers = [
       () => client.off("frame", onFrame),
       () => client.off("status", onStatus),
       () => client.off("event", onEvent),
+      () => client.off("clock", onClock),
     ];
     for (const ch of client.channels.values()) {
       const f = ch.tracker.latest;
@@ -166,9 +193,12 @@ export class ControlMux {
     for (const slot of this.slots.values()) if (slot.enabled) this.startSlot(slot);
     this.publish();
     if (client.mode === "lockstep") void this.pace();
+    if (client.options.heartbeat === "manual") this.beat(client);
   }
 
   detach(): void {
+    clearTimeout(this.heartbeatTimer);
+    this.heartbeatTimer = undefined;
     for (const slot of this.slots.values()) this.stopSlot(slot);
     for (const d of this.detachers) d();
     this.detachers = [];
@@ -323,7 +353,7 @@ export class ControlMux {
     if (nextId === this.authority) return;
     const prev = this.authority ? this.slots.get(this.authority) : undefined;
     this.authority = nextId;
-    if (prev) {
+    if (prev && this.handoff === "cancel") {
       for (const t of this.tracked.values()) {
         if (t.source === prev.def.id && !t.rec.terminal) this.client?.cancel(t.rec.action_id).catch(() => undefined);
       }
@@ -364,6 +394,10 @@ export class ControlMux {
         return mux.tickNs / 1e6;
       },
       latest: <T>(channel: string) => mux.latestPayload.get(channel) as T | undefined,
+      frame: (channel) => mux.client?.latest(channel),
+      alive: () => {
+        slot.alive = true;
+      },
       onFrame: <T>(channel: string, fn: (p: T) => void) => {
         let set = mux.frameListeners.get(channel);
         if (!set) {
@@ -430,7 +464,13 @@ export class ControlMux {
     if (!client) throw new Error("no session");
     const actionId = `${slot.def.id}-${this.runId}-${++this.actionCounter}`;
     const entryId = `act:${actionId}`;
-    const detail = summarize(params);
+    const detail = summarize(params, opts.embodiment);
+    // The age of the view this decision rests on as it leaves: what the world will judge. It is
+    // measured through the clock offset, which the first heartbeats of a session establish.
+    if (opts.basis && client.mode === "streaming") await client.clockReady(1000);
+    const staleness = opts.basis ? client.stalenessNs(opts.basis) : undefined;
+    const basisAgeMs = staleness === undefined ? undefined : Math.max(0, staleness / 1e6);
+    const extra = { embodiment: opts.embodiment, basisAgeMs };
     this.emit({
       id: entryId,
       source: slot.def.id,
@@ -439,7 +479,7 @@ export class ControlMux {
       detail,
       actionId,
       state: "submitted",
-      data: { params },
+      data: { params, ...extra },
     });
     try {
       const rec = await client.submit(type, params, {
@@ -447,8 +487,10 @@ export class ControlMux {
         ...(opts.embodiment ? { embodimentId: opts.embodiment } : {}),
         ...(opts.preempt ? { preempt: opts.preempt } : {}),
         ...(opts.deadlineMs !== undefined ? { deadlineMs: opts.deadlineMs } : {}),
+        ...(opts.basis ? { basis: opts.basis } : {}),
+        ...(opts.validForMs !== undefined ? { validForMs: opts.validForMs } : {}),
       });
-      this.tracked.set(actionId, { source: slot.def.id, rec, type, params });
+      this.tracked.set(actionId, { source: slot.def.id, rec, type, params, ...extra });
       this.onStatus(rec);
       return rec;
     } catch (e) {
@@ -462,9 +504,18 @@ export class ControlMux {
         detail,
         actionId,
         state: "rejected",
-        data: { params, reason, error: why },
+        data: { params, reason, error: why, ...extra },
       });
-      this.remember({ actionId, source: slot.def.id, type, params, state: "rejected", reason: why, ts: Date.now() });
+      this.remember({
+        actionId,
+        source: slot.def.id,
+        type,
+        params,
+        embodiment: opts.embodiment,
+        state: "rejected",
+        reason: why,
+        ts: Date.now(),
+      });
       throw e;
     }
   }
@@ -477,10 +528,16 @@ export class ControlMux {
       source: t.source,
       kind: "action",
       title: t.type,
-      detail: summarize(t.params),
+      detail: summarize(t.params, t.embodiment),
       actionId: rec.action_id,
       state: rec.state,
-      data: { params: t.params, reason: rec.reason, progress: rec.progress },
+      data: {
+        params: t.params,
+        reason: rec.reason,
+        progress: rec.progress,
+        embodiment: t.embodiment,
+        basisAgeMs: t.basisAgeMs,
+      },
     });
     if (isTerminal(rec.state)) {
       this.remember({
@@ -488,8 +545,10 @@ export class ControlMux {
         source: t.source,
         type: t.type,
         params: t.params,
+        embodiment: t.embodiment,
         state: rec.state,
         reason: rec.reason,
+        detail: rec.detail,
         ts: Date.now(),
       });
       this.wake();
@@ -637,6 +696,21 @@ export class ControlMux {
     }
   }
 
+  /**
+   * The heartbeat of a client whose own is manual: one ping a period while the authority shows life.
+   * A controller with `intent` liveness that stops calling `alive()` lets the pings stop, and the
+   * world's watchdog then puts the embodiments in safe state (AWP-SAF-005). With no holder, or one
+   * with `auto` liveness, the agent process itself is what must be alive.
+   */
+  private beat(client: AwpClient): void {
+    if (this.client !== client) return;
+    const holder = this.authority ? this.slots.get(this.authority) : undefined;
+    const live = !holder || holder.liveness === "auto" || holder.alive;
+    if (holder) holder.alive = false;
+    if (live) void client.heartbeat().catch(() => undefined);
+    this.heartbeatTimer = setTimeout(() => this.beat(client), client.pingPeriodMs);
+  }
+
   private wake(): void {
     const p = this.poke;
     this.poke = undefined;
@@ -676,10 +750,10 @@ function redactConfig(config: unknown, secrets: Set<string>): unknown {
   return out;
 }
 
-/** A compact one-line rendering of action params. */
-export function summarize(params: Record<string, unknown>): string {
+/** A compact one-line rendering of action params, after the embodiment when one is named. */
+export function summarize(params: Record<string, unknown>, embodiment?: string): string {
   const parts = Object.entries(params).map(([k, v]) => `${k} ${formatValue(v)}`);
-  return parts.join(" · ");
+  return [embodiment, ...parts].filter(Boolean).join(" · ");
 }
 
 function formatValue(v: unknown): string {
@@ -695,10 +769,13 @@ export function describeEvent(e: { event: string; detail?: Record<string, unknow
   return `${EVENT_TITLES[e.event] ?? e.event}${detail ? ` (${detail})` : ""}`;
 }
 
+/** An event's detail in one line, led by the embodiment it concerns. */
 function describeDetail(d: Record<string, unknown>): string | undefined {
-  const parts = Object.entries(d)
-    .filter(([k]) => k !== "embodiment" || Object.keys(d).length === 1)
-    .map(([k, v]) => `${k} ${formatValue(v)}`);
+  const { embodiment, ...rest } = d;
+  const parts = [
+    ...(typeof embodiment === "string" ? [embodiment] : []),
+    ...Object.entries(rest).map(([k, v]) => `${k} ${formatValue(v)}`),
+  ];
   return parts.length ? parts.join(" · ") : undefined;
 }
 

@@ -1,5 +1,5 @@
 import type { ActivityEntry, ControllerKind } from "@awp-demo/inspector";
-import type { ActionRecord, TimeModel, WorldManifest } from "@hyperduality/awp";
+import type { ActionRecord, ReceivedFrame, TimeModel, WorldManifest } from "@hyperduality/awp";
 import type { z } from "zod";
 
 /**
@@ -19,6 +19,12 @@ export interface Controller<C = unknown> {
    * while it waits on the world (`on-wait`, e.g. an LLM that should not lose ticks while it thinks).
    */
   time?: "continuous" | "on-wait";
+  /**
+   * Streaming, on an agent whose heartbeat follows intent: `intent` means the agent pings for this
+   * controller only while it shows life through `alive()`, so a stalled controller lets the world's
+   * watchdog stop motion (AWP-SAF-005). `auto` (the default) keeps pinging while it holds control.
+   */
+  liveness?: "auto" | "intent";
   config: z.ZodType<C>;
   /** Enabled when the agent starts (default true). */
   enabled?: boolean;
@@ -47,6 +53,10 @@ export interface SubmitOptions {
   embodiment?: string;
   preempt?: "queue" | "replace" | "blend" | "reject";
   deadlineMs?: number;
+  /** The frame the intent rests on; its capture time travels as `basis_ts_mono_ns` (AWP-ACT-007). */
+  basis?: ReceivedFrame | undefined;
+  /** Streaming: how long the intent stays valid, as `valid_until_ns` (AWP-ACT-007). */
+  validForMs?: number;
   /** Stops waiting for authority when aborted, besides the controller's own signal. */
   signal?: AbortSignal;
 }
@@ -58,8 +68,12 @@ export interface HistoryEntry {
   source: string;
   type: string;
   params: Record<string, unknown>;
+  /** The embodiment named in the submission, in a multi-bind session. */
+  embodiment?: string | undefined;
   state: string;
   reason?: string | undefined;
+  /** What the world said about the ending, when it said more than the reason. */
+  detail?: string | undefined;
   ts: number;
 }
 
@@ -88,11 +102,15 @@ export interface ControlContext<C = unknown> {
 
   /** The newest decoded payload on a channel. */
   latest<T = unknown>(channel: string): T | undefined;
+  /** The newest frame on a channel, with its timestamps: the basis to name in a submission. */
+  frame(channel: string): ReceivedFrame | undefined;
   onFrame<T = unknown>(channel: string, fn: (payload: T) => void): () => void;
   /** Resolves on the next frame (streaming) or the next advance (lockstep). Requests no time. */
   nextObservation(): Promise<void>;
 
   readonly hasAuthority: boolean;
+  /** Shows that this controller is still deciding; see `Controller.liveness`. */
+  alive(): void;
   /** Ask for control; the highest-priority engaged controller holds it. */
   engage(): void;
   release(): void;

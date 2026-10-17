@@ -7,6 +7,7 @@ export { ActivityPanel } from "./panels/ActivityPanel.tsx";
 export { ControlPanel } from "./panels/ControlPanel.tsx";
 export { type ChannelRenderers, ObservationPanel } from "./panels/ObservationPanel.tsx";
 export { SessionPanel } from "./panels/SessionPanel.tsx";
+export { TimingPanel } from "./panels/TimingPanel.tsx";
 export { WirePanel } from "./panels/WirePanel.tsx";
 export { WorldActions } from "./panels/WorldPanel.tsx";
 export { IconButton } from "./primitives/IconButton.tsx";

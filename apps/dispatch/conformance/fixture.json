@@ -1,0 +1,14 @@
+{
+  "embodiment": "engine_1",
+  "subscribe": ["units", "calls", "shift"],
+  "moves": [
+    { "type": "stage", "params": { "at": "A1" } },
+    { "type": "stage", "params": { "at": "I2" } },
+    { "type": "stage", "params": { "at": "D7" } }
+  ],
+  "extended_min_ms": 1500,
+  "invalid": { "type": "stage", "params": { "at": "Z9" } },
+  "initial_state": "default",
+  "operator": { "estop_engage": "kill -USR1 $WORLD_PID", "estop_release": "kill -USR2 $WORLD_PID" },
+  "audit_dir": "conformance/audit"
+}

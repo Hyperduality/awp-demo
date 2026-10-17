@@ -1,0 +1,4 @@
+{
+  "extends": "@awp-demo/tsconfig/react.json",
+  "include": ["src/ui", "src/shared", "vite.config.ts"]
+}
