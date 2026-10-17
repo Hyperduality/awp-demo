@@ -79,7 +79,13 @@ function fail(name: ErrorName, detail?: string, extra: Json = {}): never {
   throw new AwpFailure(ErrorCode[name], name, detail, extra);
 }
 
-const RETRYABLE = new Set<string>(["AWP_BUSY", "AWP_QUEUE_FULL", "AWP_ESTOP_ACTIVE", "AWP_EMBODIMENT_UNAVAILABLE"]);
+const RETRYABLE = new Set<string>([
+  "AWP_BUSY",
+  "AWP_QUEUE_FULL",
+  "AWP_ESTOP_ACTIVE",
+  "AWP_EMBODIMENT_UNAVAILABLE",
+  "AWP_STALE_INTENT",
+]);
 
 interface Conn {
   id: number;
@@ -126,6 +132,8 @@ interface Action {
   progress: number;
   clamped: boolean;
   deadlineNs: number | undefined;
+  basisNs: number | undefined;
+  validUntilNs: number | undefined;
   /** Lockstep replace: preempts the group's executing action at the next advance (AWP-PRE-007). */
   replaces: boolean;
   lastProgressNs: number;
@@ -190,6 +198,7 @@ export class WorldHost<View = unknown> {
   private readonly heartbeatMs: number;
   private readonly windowMs: number;
   private readonly watchdogMs: number | undefined;
+  private readonly maxBasisAgeMs: number | undefined;
   private readonly conns = new Map<number, Conn>();
   private readonly sessions = new Map<string, Session>();
   private readonly byToken = new Map<string, Session>();
@@ -224,6 +233,7 @@ export class WorldHost<View = unknown> {
     this.heartbeatMs = def.heartbeatIntervalMs ?? 5000;
     this.windowMs = def.reconnectWindowMs ?? 30000;
     this.watchdogMs = def.manifest.safety_policy.safe_state?.watchdog_ms;
+    this.maxBasisAgeMs = def.manifest.safety_policy.max_basis_age_ms;
     for (const a of def.manifest.action_schemas) {
       this.types.set(a.type, a);
       this.validators.set(a.type, compileParamsSchema(def.manifest, a));
@@ -827,6 +837,12 @@ export class WorldHost<View = unknown> {
     const policies = Array.isArray(schema.preemption) ? schema.preemption : [schema.preemption];
     const preempt = (p.preempt as string | undefined) ?? policies[0]!;
     if (!policies.includes(preempt as never)) fail("AWP_PARAMS_INVALID", `${type} does not offer preempt ${preempt}`);
+    const basisNs = typeof p.basis_ts_mono_ns === "number" ? p.basis_ts_mono_ns : undefined;
+    const validUntilNs = typeof p.valid_until_ns === "number" ? p.valid_until_ns : undefined;
+    // Observation-to-action latency is measured per submission, refused or not.
+    if (basisNs !== undefined) s.telemetry.o2a.push(Math.max(0, receivedTs - basisNs));
+    const stale = this.staleness(receivedTs, basisNs, validUntilNs);
+    if (stale) fail("AWP_STALE_INTENT", stale);
     const verdict = this.sim.admit?.(embodiment, type, params) ?? { ok: true };
     if ("error" in verdict) fail(verdict.error, verdict.detail, verdict.retryable ? { retryable: true } : {});
 
@@ -840,7 +856,6 @@ export class WorldHost<View = unknown> {
         fail("AWP_QUEUE_FULL", `the queue of ${group} is full`, { retry_after_ms: 100 });
       initial = "queued";
     }
-    if (typeof p.basis_ts_mono_ns === "number") s.telemetry.o2a.push(Math.max(0, receivedTs - p.basis_ts_mono_ns));
 
     const a: Action = {
       id: actionId,
@@ -860,6 +875,8 @@ export class WorldHost<View = unknown> {
       progress: 0,
       clamped: false,
       deadlineNs: typeof p.deadline_ms === "number" ? receivedTs + p.deadline_ms * 1e6 : undefined,
+      basisNs,
+      validUntilNs,
       replaces: false,
       lastProgressNs: 0,
       abortDoneNs: undefined,
@@ -879,13 +896,15 @@ export class WorldHost<View = unknown> {
       }
     }
     s.actions.set(actionId, a);
+    // A session's first activity can be this submission (streaming, nothing subscribed); it becomes
+    // active first, so its `session.state` is sent in sequence before the admission's result.
+    this.activate(s);
     // The admission transition is first reported in the result (AWP-CTL-008).
     a.state = initial;
     a.lastSeq = ++s.statusSeq;
     a.lastTs = receivedTs;
     this.retain(s, this.statusMessage(s, a, {}));
     this.audit(s, "internal", "status", { action_id: a.id, state: initial });
-    this.activate(s);
     const result = this.submitResult(a);
     s.telemetry.admission.push(Math.max(0, this.clock(s) - receivedTs));
     this.result(s.conn!, this.currentId, "action.submit", result);
@@ -1005,6 +1024,19 @@ export class WorldHost<View = unknown> {
   // ---------------------------------------------------------------------------------------------
   // Streaming
 
+  /**
+   * Why an intent is stale at session time `now`, or undefined. The bounds bind in streaming, once
+   * the manifest declares `max_basis_age_ms` (AWP-SAF-013).
+   */
+  private staleness(now: number, basisNs: number | undefined, validUntilNs: number | undefined): string | undefined {
+    if (this.mode !== "streaming" || this.maxBasisAgeMs === undefined) return undefined;
+    if (validUntilNs !== undefined && now > validUntilNs)
+      return `valid_until_ns passed ${Math.round((now - validUntilNs) / 1e6)} ms ago`;
+    if (basisNs !== undefined && now - basisNs > this.maxBasisAgeMs * 1e6)
+      return `the basis observation is ${Math.round((now - basisNs) / 1e6)} ms old; max_basis_age_ms is ${this.maxBasisAgeMs}`;
+    return undefined;
+  }
+
   private stepStreaming(dt: number): void {
     for (const s of this.sessions.values()) if (s.state !== "closed") this.updateRuns(s, dt, false);
     this.sim.step(dt);
@@ -1020,17 +1052,14 @@ export class WorldHost<View = unknown> {
           .filter((a) => a.group === group)
           .sort((x, y) => x.order - y.order);
         if (inGroup.some((a) => a.state === "executing" || a.state === "cancelling")) continue;
-        const accepted = inGroup.find((a) => a.state === "accepted");
-        if (accepted) {
-          this.begin(s, accepted);
-          changed = true;
-          continue;
-        }
-        const queued = inGroup.find((a) => a.state === "queued");
-        if (queued) {
-          this.transition(s, queued, "accepted", {});
-          changed = true;
-        }
+        const next = inGroup.find((a) => a.state === "accepted") ?? inGroup.find((a) => a.state === "queued");
+        if (!next) continue;
+        changed = true;
+        // A waiting intent is checked against its bounds again before it goes on (AWP-SAF-013).
+        const stale = this.staleness(this.clock(s), next.basisNs, next.validUntilNs);
+        if (stale) this.finish(s, next, "rejected", { reason: "stale_intent", detail: stale });
+        else if (next.state === "accepted") this.begin(s, next);
+        else this.transition(s, next, "accepted", {});
       }
       if (!changed) break;
     }

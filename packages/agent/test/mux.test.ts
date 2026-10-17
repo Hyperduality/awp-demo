@@ -19,13 +19,18 @@ afterEach(async () => {
   world = undefined;
 });
 
-async function setup(mode: "lockstep" | "streaming", controllers: Controller<any>[]) {
+async function setup(
+  mode: "lockstep" | "streaming",
+  controllers: Controller<any>[],
+  opts: { handoff?: "cancel" | "inherit"; heartbeat?: "intent" } = {},
+) {
   world = await serveWorld(gridworld(mode), { port: 0, token: TOKEN, log: () => {} });
   client = new AwpClient({
     url: world.url,
     token: TOKEN,
     agent: { name: "mux-test", version: "0", vendor: "awp-demo" },
     consumesModalities: ["text/event+json"],
+    ...(opts.heartbeat === "intent" ? { heartbeat: "manual" as const, obsReport: false } : {}),
   });
   await client.initialize();
   await client.openSession(mode, { embodiment: "avatar_0", subscribe: ["grid_view"] });
@@ -33,7 +38,7 @@ async function setup(mode: "lockstep" | "streaming", controllers: Controller<any
   mux = new ControlMux(
     controllers,
     { activity: (e) => activity.push(e), controllers: () => {}, changed: () => {} },
-    { rateHz: 0 },
+    { rateHz: 0, ...(opts.handoff ? { handoff: opts.handoff } : {}) },
   );
   mux.attach(client);
   return { activity, mux, client, world };
@@ -141,5 +146,74 @@ describe("control mux", () => {
     const after = client.tick;
     await new Promise((r) => setTimeout(r, 150));
     expect(client.tick).toBe(after);
+  });
+});
+
+/** Drives with an intent heartbeat: alive while `beating` says so. */
+function walker(beating: () => boolean): Controller<{}> {
+  return {
+    id: "llm",
+    kind: "llm",
+    label: "Walker",
+    description: "Walks far",
+    config: z.object({}),
+    liveness: "intent",
+    create(ctx) {
+      ctx.engage();
+      const timer = setInterval(() => beating() && ctx.alive(), 100);
+      void (async () => {
+        await ctx.acquire();
+        while (!ctx.frame("grid_view")) await ctx.nextObservation();
+        await ctx.submit("walk_to", { cell: [400, 0] }, { basis: ctx.frame("grid_view") });
+      })();
+      return { stop: () => clearInterval(timer) };
+    },
+  };
+}
+
+describe("control mux in streaming", () => {
+  it("leaves the previous holder's actions running when set to inherit", async () => {
+    let held: ControlContext<{}> | undefined;
+    const desk: Controller<{}> = {
+      id: "manual",
+      kind: "manual",
+      label: "Manual",
+      description: "Takes the desk",
+      config: z.object({}),
+      create(ctx) {
+        held = ctx;
+        return { input: () => ctx.engage() };
+      },
+    };
+    const { activity, mux } = await setup("streaming", [program(), desk], { handoff: "inherit" });
+    await until(() => activity.some((e) => e.source === "program" && e.kind === "action" && e.state === "executing"));
+    mux.input("manual", null);
+    await until(() => mux.authority === "manual");
+    await new Promise((r) => setTimeout(r, 200));
+    const program_ = activity.filter((e) => e.source === "program" && e.kind === "action");
+    expect(program_.at(-1)?.state).toBe("executing");
+    expect(activity.some((e) => e.source === "program" && e.state === "cancelled")).toBe(false);
+    held!.release();
+    await until(() => mux.authority === "program");
+  });
+
+  it("names the basis of a submission and reports its age", async () => {
+    const { activity } = await setup("streaming", [walker(() => true)], { heartbeat: "intent" });
+    await until(() => activity.some((e) => e.kind === "action" && e.state === "executing"));
+    const entry = activity.find((e) => e.kind === "action" && e.state === "submitted")!;
+    const age = (entry.data as { basisAgeMs?: number }).basisAgeMs;
+    expect(typeof age).toBe("number");
+    expect(age).toBeLessThan(1000);
+  });
+
+  it("stops the heartbeat when an intent controller stops showing life (AWP-SAF-005)", async () => {
+    let beating = true;
+    const { client } = await setup("streaming", [walker(() => beating)], { heartbeat: "intent" });
+    const events: string[] = [];
+    client.on("event", (e: { event: string }) => events.push(e.event));
+    await new Promise((r) => setTimeout(r, 1600));
+    expect(events).not.toContain("safe_state_entered");
+    beating = false;
+    await until(() => events.includes("safe_state_entered"), 3000);
   });
 });

@@ -1,4 +1,4 @@
-import { AgentTopic, type ControllerState, WorldTopic } from "@awp-demo/inspector";
+import { type AgentStatus, AgentTopic, type ControllerState, WorldTopic } from "@awp-demo/inspector";
 import { useTopic } from "@awp-demo/inspector/react";
 import { Tabs } from "@heroui/react";
 import type { WorldManifest } from "@hyperduality/awp";
@@ -12,6 +12,7 @@ export function AboutPanel() {
   const { demo, world, agent } = useDemo();
   const manifest = useTopic<WorldManifest>(world, WorldTopic.manifest);
   const controllers = useTopic<ControllerState[]>(agent, AgentTopic.controllers) ?? [];
+  const status = useTopic<AgentStatus>(agent, AgentTopic.status);
   const [raw, setRaw] = useState(false);
   return (
     <Tabs className="flex h-full flex-col px-3 pb-3">
@@ -132,7 +133,9 @@ export function AboutPanel() {
         <div className="space-y-4">
           <p className="text-sm text-foreground">
             One AWP session. Controllers share it; the highest-priority engaged controller holds control, and a handoff
-            cancels what the previous one was doing.
+            {status?.handoff === "inherit"
+              ? " leaves what the previous one started running, for the new holder to keep or replace."
+              : " cancels what the previous one was doing."}
           </p>
           {controllers.map((c) => (
             <div key={c.id}>

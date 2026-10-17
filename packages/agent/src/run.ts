@@ -21,6 +21,13 @@ export interface AgentOptions {
   /** What to bind and subscribe to, given the world's manifest. */
   open(manifest: WorldManifest): OpenOptions & { mode?: TimeModel };
   clock?: { rateHz?: number; paused?: boolean };
+  /**
+   * `intent`: in streaming, the agent pings only while the controller in control shows life, so a
+   * stalled controller lets the world's watchdog stop motion (AWP-SAF-005). Default `auto`.
+   */
+  heartbeat?: "auto" | "intent";
+  /** What a handoff does to the previous holder's live actions (default `cancel`). */
+  handoff?: "cancel" | "inherit";
   log?: (line: string) => void;
 }
 
@@ -51,7 +58,7 @@ export async function runAgent(opts: AgentOptions): Promise<RunningAgent> {
       controllers: (list) => controllersTopic?.set(list),
       changed: () => statusTopic?.set(snapshot()),
     },
-    opts.clock,
+    { ...opts.clock, ...(opts.handoff ? { handoff: opts.handoff } : {}) },
   );
 
   function snapshot(): AgentStatus {
@@ -69,6 +76,10 @@ export async function runAgent(opts: AgentOptions): Promise<RunningAgent> {
       clock: mux ? { ...mux.clock, waiting: mux.clock.waiting > 0 } : { paused: false, rateHz: 20, waiting: false },
       error,
       manifest: c?.manifest?.raw,
+      telemetry: c?.telemetry as AgentStatus["telemetry"],
+      heartbeatAt: mux?.heartbeatAt,
+      heartbeat: opts.heartbeat ?? "auto",
+      handoff: mux?.handoff ?? "cancel",
     };
   }
   const setConnection = (c: AgentStatus["connection"], e?: string) => {
@@ -106,6 +117,9 @@ export async function runAgent(opts: AgentOptions): Promise<RunningAgent> {
         ...(opts.token ? { token: opts.token } : {}),
         agent: { name: opts.name, version: "0.1.0", vendor: "awp-demo" },
         consumesModalities: opts.consumes,
+        // Under an intent heartbeat the mux sends the pings. Receiver reports on the SDK's own timer
+        // would also count as the agent originating traffic and hold the watchdog off, so they stay off.
+        ...(opts.heartbeat === "intent" ? { heartbeat: "manual" as const, obsReport: false } : {}),
         logger: (level, message) => {
           if (level === "warn" || level === "error") log(`${level}: ${message}`);
         },

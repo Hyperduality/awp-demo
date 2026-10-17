@@ -2,7 +2,10 @@ import type { WorldManifest } from "@hyperduality/awp";
 import type { ActionRun, Sim, WorldDefinition } from "../src/types.ts";
 
 /** The spec's example gridworld (examples/v0.1/traces/core-lockstep.jsonl), in either time model. */
-export function gridworld(mode: "lockstep" | "streaming"): WorldDefinition<{ avatar: number[] }> {
+export function gridworld(
+  mode: "lockstep" | "streaming",
+  opts: { maxBasisAgeMs?: number } = {},
+): WorldDefinition<{ avatar: number[] }> {
   const manifest: WorldManifest = {
     protocol_version: "0.1",
     world: { name: "gridworld", version: "0.1.0", vendor: "awp-demo" },
@@ -57,6 +60,7 @@ export function gridworld(mode: "lockstep" | "streaming"): WorldDefinition<{ ava
     safety_policy: {
       envelopes: [],
       ...(mode === "streaming" ? { safe_state: { behavior: "safe_stop", watchdog_ms: 1000 } } : {}),
+      ...(opts.maxBasisAgeMs !== undefined ? { max_basis_age_ms: opts.maxBasisAgeMs } : {}),
     },
   };
   return {

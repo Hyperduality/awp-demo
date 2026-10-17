@@ -194,6 +194,31 @@ export interface AgentStatus {
   clock: { paused: boolean; rateHz: number; waiting: boolean };
   error?: string | undefined;
   manifest?: unknown;
+  /** Streaming: the world's latest `session.telemetry` (AWP-TIM-006). */
+  telemetry?: SessionTelemetryView | undefined;
+  /** Wall-clock ms of the last completed heartbeat exchange. */
+  heartbeatAt?: number | undefined;
+  /** `intent`: the agent pings only while the controller in control shows life (AWP-SAF-005). */
+  heartbeat?: "auto" | "intent";
+  /** What a handoff does to the previous holder's live actions. */
+  handoff?: "cancel" | "inherit";
+}
+
+/** Percentiles in ns, as `session.telemetry` carries them. */
+export interface LatencyView {
+  count: number;
+  p50: number;
+  p95: number;
+  max?: number;
+}
+
+export interface SessionTelemetryView {
+  window_ms: number;
+  observation_latency_ns?: LatencyView;
+  admission_latency_ns?: LatencyView;
+  observation_to_action_ns?: LatencyView;
+  command_latency_ns?: LatencyView;
+  channels?: Record<string, LatencyView>;
 }
 
 // ---------------------------------------------------------------------------------------------
