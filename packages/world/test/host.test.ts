@@ -349,6 +349,24 @@ describe("a world offering both time models", () => {
     await b.close();
   });
 
+  it("grants a lockstep channel the rate asked and paces it on simulated time (AWP-NEG-003)", async () => {
+    const w = await both();
+    const trace: { dir: string; m: { method?: string } }[] = [];
+    const c = client(w.url, trace as unknown[]);
+    await c.initialize();
+    const ready = await c.openSession("lockstep", {
+      embodiment: "avatar_0",
+      subscribe: [{ channel: "grid_view", rate_hz: 5 }],
+    });
+    expect(ready.granted.channels[0]?.rate_hz).toBe(5);
+    const frames = () => trace.filter((t) => t.dir === "in" && t.m.method === "obs.frame").length;
+    const before = frames();
+    // 20 advances of 50 ms are a simulated second: five frames at 5 Hz.
+    for (let i = 0; i < 20; i++) await c.advance(1);
+    expect(frames() - before).toBe(5);
+    await c.close();
+  });
+
   it("refuses a session in the other time model while one is bound (AWP-TIM-001)", async () => {
     const w = await both();
     const a = client(w.url);
