@@ -40,6 +40,8 @@ export interface RunningWorld<View = unknown> {
   url: string;
   port: number;
   inspector: InspectorServer | undefined;
+  /** Engage or release the operator e-stop, as the inspector and the signals do. */
+  estop(engage: boolean): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -66,6 +68,10 @@ export async function serveWorld<View>(def: WorldDefinition<View>, opts: ServeOp
         : undefined,
       changed: () => publishWorld(),
       invalid: (schema, problems) => log(`outgoing ${schema} failed its sender form: ${problems.join("; ")}`),
+      // Device-level evidence for AWP-GAM-002..004, one record per applied state.
+      input: opts.auditDir
+        ? (record) => appendFileSync(join(opts.auditDir!, `${run}-input.jsonl`), `${JSON.stringify(record)}\n`)
+        : undefined,
     },
   });
   await host.ready();
@@ -230,6 +236,9 @@ export async function serveWorld<View>(def: WorldDefinition<View>, opts: ServeOp
     url,
     port,
     inspector,
+    async estop(engage) {
+      apply(await (engage ? host.engageEStop(monotonicNs()) : host.releaseEStop(monotonicNs())));
+    },
     async close() {
       stopped = true;
       clearTimeout(timer);

@@ -1,4 +1,5 @@
 import type { FrameTree, WorldManifest } from "@hyperduality/awp";
+import type { DeviceState } from "./input.ts";
 
 /** A value or a promise of one: a sim backed by another process steps asynchronously. */
 export type MaybePromise<T> = T | Promise<T>;
@@ -53,6 +54,12 @@ export interface Sim<View = unknown> {
   start(embodiment: string, type: string, params: Record<string, unknown>, ctx: StartContext): ActionRun;
   /** Put an embodiment into its declared safe state. */
   safeStop(embodiment: string): void;
+  /**
+   * The device state the next step applies to an embodiment that takes `input_chunk` (AWP-GAM-002):
+   * called before every step, and again with everything released when a chunk ends. It records the
+   * state and never advances the world. Required when the manifest declares `input_chunk`.
+   */
+  applyInput?(embodiment: string, state: DeviceState): void;
   /** Render state for the UI (not part of AWP). */
   view(): View;
   /** Static render data sent once per inspector connection (e.g. the sorter cell geometry). */

@@ -19,6 +19,7 @@ import {
   validate,
   type WorldManifest,
 } from "@hyperduality/awp";
+import { type DeviceState, deviceState, fixedSlotMs, INPUT_CHUNK, inputChunkProblems, type Slot } from "./input.ts";
 import type { ActionRun, Sim, WorldDefinition } from "./types.ts";
 import {
   decodeB64Json,
@@ -59,6 +60,20 @@ export interface AuditRecord {
   prev_hash?: string;
 }
 
+/** One device state applied to an embodiment: the evidence for AWP-GAM-002..004. */
+export interface InputRecord {
+  /** World monotonic time, ns. */
+  ts_mono_ns: number;
+  tick?: number;
+  embodiment: string;
+  /** `step`: applied for a step; `release`: everything released as a chunk ended. */
+  kind: "step" | "release";
+  action_id?: string;
+  /** The chunk's slot this step executes. */
+  slot?: number;
+  state: DeviceState;
+}
+
 export interface HostHooks {
   /** A session's audit record (AWP-AUD-001); already redacted and hash-chained. */
   audit?(sessionId: string, record: AuditRecord): void;
@@ -66,6 +81,8 @@ export interface HostHooks {
   changed?(): void;
   /** Every outgoing message failing its sender-form schema (AWP-VER-004). */
   invalid?(what: string, problems: string[], message: unknown): void;
+  /** Every device state applied through `Sim.applyInput`. */
+  input?(record: InputRecord): void;
 }
 
 export interface HostOptions {
@@ -155,6 +172,10 @@ interface Action {
   stream: { frames_applied: number; last_seq: number; clamped_count: number; lastFrameNs: number } | undefined;
   /** Lockstep: the run already updated during this advance, when it began. */
   executedThisTick?: boolean;
+  /** `input_chunk`: the next slot to execute. */
+  slot: number;
+  /** `input_chunk`: the replacement that took over at a slot boundary, so nothing is released (AWP-GAM-003). */
+  replacedBy?: string;
 }
 
 interface Session {
@@ -225,6 +246,9 @@ export class WorldHost<View = unknown> {
   private readonly types = new Map<string, ActionSchemaDecl>();
   private readonly channels = new Map<string, ChannelDecl>();
   private readonly validators = new Map<string, ReturnType<typeof compileParamsSchema>>();
+  /** Embodiments that take `input_chunk`, and the keys each holds down now. */
+  private readonly inputEmbodiments: string[];
+  private readonly held = new Map<string, string[]>();
   private out: HostOutput[] = [];
   /** The request being handled; handlers that must follow their result with notifications answer it themselves. */
   private currentId: Id = null;
@@ -260,6 +284,18 @@ export class WorldHost<View = unknown> {
       this.types.set(a.type, a);
       this.validators.set(a.type, compileParamsSchema(def.manifest, a));
     }
+    this.inputEmbodiments = def.manifest.embodiments
+      .filter((e) => e.action_types.includes(INPUT_CHUNK))
+      .map((e) => e.id);
+    if (this.types.has(INPUT_CHUNK)) {
+      const problems = inputChunkProblems(def.manifest);
+      if (problems.length > 0) throw new Error(`input_chunk departs from AWP-GAM-001: ${problems.join("; ")}`);
+      // One slot per sim step, so a slot spans one advance (AWP-GAM-002).
+      const slotMs = fixedSlotMs(def.manifest);
+      const steps = this.modes.map((m) => (m === "lockstep" ? this.tickNs : this.stepNs) / 1e6);
+      if (slotMs === undefined || steps.some((ms) => ms !== slotMs))
+        throw new Error(`input_chunk must fix slot_ms to the sim step (${steps.join(", ")} ms)`);
+    }
     for (const c of [...def.manifest.observation_channels, ...(def.manifest.command_channels ?? [])])
       this.channels.set(c.id, c);
     this.initialState = def.manifest.initial_states?.[0] ?? "default";
@@ -267,12 +303,19 @@ export class WorldHost<View = unknown> {
     const first = def.createSim({ seed: this.seed, initialState: this.initialState });
     if (first instanceof Promise)
       this.started = first.then((sim) => {
-        this.sim = sim;
+        this.useSim(sim);
       });
     else {
-      this.sim = first;
+      this.useSim(first);
       this.started = Promise.resolve();
     }
+  }
+
+  private useSim(sim: Sim<View>): void {
+    if (this.inputEmbodiments.length > 0 && !sim.applyInput)
+      throw new Error("a sim behind input_chunk must implement applyInput");
+    this.sim = sim;
+    this.held.clear();
   }
 
   /** Resolves once the first sim exists. */
@@ -747,7 +790,7 @@ export class WorldHost<View = unknown> {
     }
     if (typeof p.seed === "number" && this.manifest.capabilities?.seed === true && !observer) {
       this.seed = p.seed;
-      this.sim = await this.def.createSim({ seed: this.seed, initialState: this.initialState });
+      this.useSim(await this.def.createSim({ seed: this.seed, initialState: this.initialState }));
     }
     this.sessions.set(s.id, s);
     this.byToken.set(s.token, s);
@@ -972,6 +1015,7 @@ export class WorldHost<View = unknown> {
       abortDoneNs: undefined,
       abortReason: undefined,
       stream: undefined,
+      slot: 0,
     };
     if (schema.max_duration_ms !== undefined) {
       const cap = receivedTs + schema.max_duration_ms * 1e6;
@@ -980,8 +1024,9 @@ export class WorldHost<View = unknown> {
     if (preempt === "replace") {
       for (const other of live) {
         if (other.state === "executing" || other.state === "cancelling") {
-          if (this.mode === "streaming") this.preempt(s, other);
-          else a.replaces = true; // AWP-PRE-007
+          // In lockstep (AWP-PRE-007), and for device input at the next slot boundary (AWP-GAM-003).
+          if (this.mode === "streaming" && type !== INPUT_CHUNK) this.preempt(s, other);
+          else a.replaces = true;
         } else this.finish(s, other, "cancelled", { reason: "superseded" });
       }
     }
@@ -1070,8 +1115,10 @@ export class WorldHost<View = unknown> {
     const dt = this.tickNs / 1e6;
     const live = [...this.sessions.values()].filter((s) => s.state !== "closed");
     for (const s of live) this.startStaged(s);
+    this.applyInputs(live);
     for (const s of live) this.updateRuns(s, dt, true);
     await this.sim.step(dt);
+    this.advanceInputs(live);
     for (const s of live) {
       this.promoteQueued(s);
       for (const g of s.grants.values()) if (!g.command) this.emitFrame(s, g, false);
@@ -1089,7 +1136,9 @@ export class WorldHost<View = unknown> {
         });
       }
     }
-    const staged = [...s.actions.values()].filter((a) => a.state === "accepted").sort((x, y) => x.order - y.order);
+    const staged = [...s.actions.values()]
+      .filter((a) => a.state === "accepted" && a.type !== INPUT_CHUNK)
+      .sort((x, y) => x.order - y.order);
     for (const a of staged) {
       const running = this.liveActions(s).find(
         (o) => o.group === a.group && (o.state === "executing" || o.state === "cancelling"),
@@ -1129,8 +1178,11 @@ export class WorldHost<View = unknown> {
   }
 
   private async stepStreaming(dt: number): Promise<void> {
-    for (const s of this.sessions.values()) if (s.state !== "closed") this.updateRuns(s, dt, false);
+    const live = [...this.sessions.values()].filter((s) => s.state !== "closed");
+    this.applyInputs(live);
+    for (const s of live) this.updateRuns(s, dt, false);
     await this.sim.step(dt);
+    this.advanceInputs(live);
   }
 
   /** Streaming: promote queued, start accepted, as soon as a group frees. */
@@ -1145,6 +1197,8 @@ export class WorldHost<View = unknown> {
         if (inGroup.some((a) => a.state === "executing" || a.state === "cancelling")) continue;
         const next = inGroup.find((a) => a.state === "accepted") ?? inGroup.find((a) => a.state === "queued");
         if (!next) continue;
+        // A chunk begins at the world's first input update after admission (AWP-GAM-002).
+        if (next.type === INPUT_CHUNK && next.state === "accepted") continue;
         changed = true;
         // A waiting intent is checked against its bounds again before it goes on (AWP-SAF-013).
         const stale = this.staleness(this.clock(s), next.basisNs, next.validUntilNs);
@@ -1312,9 +1366,14 @@ export class WorldHost<View = unknown> {
       s.inSafeState = false;
       this.event(s, "safe_state_exited", { embodiment: a.embodiment });
     }
+    a.lastProgressNs = this.clock(s);
+    if (a.type === INPUT_CHUNK) {
+      // The host runs device input itself, a slot per step (applyInputs, advanceInputs).
+      this.transition(s, a, "executing", { progress: 0 });
+      return;
+    }
     const run = this.sim.start(a.embodiment, a.type, a.params, { actionId: a.id, sessionId: s.id });
     a.run = run;
-    a.lastProgressNs = this.clock(s);
     if (a.schema.duration === "streaming")
       a.stream = { frames_applied: 0, last_seq: 0, clamped_count: 0, lastFrameNs: this.clock(s) };
     const extra: Json = a.schema.duration === "extended" && this.mode === "streaming" ? { progress: 0 } : {};
@@ -1364,7 +1423,8 @@ export class WorldHost<View = unknown> {
 
   private preempt(s: Session, a: Action): void {
     a.run?.abort?.();
-    this.finish(s, a, "preempted", {});
+    // A replaced chunk reports the slots it completed (AWP-GAM-003).
+    this.finish(s, a, "preempted", a.type === INPUT_CHUNK ? { aborted_at_progress: round3(a.progress) } : {});
   }
 
   private startAbort(s: Session, a: Action, reason: string, deferInLockstep = false): void {
@@ -1385,6 +1445,9 @@ export class WorldHost<View = unknown> {
   /** Terminal transitions (through `cancelling` where the table requires it). */
   private finish(s: Session, a: Action, to: ActionState, extra: Json): void {
     if (isTerminal(a.state)) return;
+    // A chunk that ends with no replacement taking over releases everything first (AWP-GAM-004).
+    if (a.type === INPUT_CHUNK && a.replacedBy === undefined && (a.state === "executing" || a.state === "cancelling"))
+      this.releaseInput(a);
     if (to === "cancelled" && a.state === "executing") {
       this.transition(s, a, "cancelling", { reason: extra.reason });
       a.run?.abort?.();
@@ -1447,6 +1510,81 @@ export class WorldHost<View = unknown> {
   }
 
   // ---------------------------------------------------------------------------------------------
+  // Device input (AWP-GAM-002..004)
+
+  /**
+   * Before a step: chunks waiting for a slot boundary take over, then every input embodiment gets the
+   * device state of its running chunk's next slot, or nothing held.
+   */
+  private applyInputs(live: Session[]): void {
+    if (this.inputEmbodiments.length === 0) return;
+    const running = new Map<string, Action>();
+    for (const s of live) {
+      const waiting = this.liveActions(s)
+        .filter((a) => a.type === INPUT_CHUNK && a.state === "accepted")
+        .sort((x, y) => x.order - y.order);
+      for (const a of waiting) {
+        const current = this.liveActions(s).find(
+          (o) => o.group === a.group && (o.state === "executing" || o.state === "cancelling"),
+        );
+        if (current) {
+          if (!a.replaces || current.state === "cancelling") continue;
+          current.replacedBy = a.id;
+          this.preempt(s, current);
+        }
+        const stale = this.staleness(this.clock(s), a.basisNs, a.validUntilNs);
+        if (stale) {
+          this.finish(s, a, "rejected", { reason: "stale_intent", detail: stale });
+          continue;
+        }
+        this.begin(s, a);
+      }
+      for (const a of this.liveActions(s))
+        if (a.type === INPUT_CHUNK && a.state === "executing") running.set(a.embodiment, a);
+    }
+    for (const emb of this.inputEmbodiments) {
+      const a = running.get(emb);
+      const slot = a ? (a.params.slots as Slot[])[a.slot] : undefined;
+      this.applyDevice(emb, "step", slot, a);
+    }
+  }
+
+  /** After a step: running chunks move to their next slot, and finish after their last. */
+  private advanceInputs(live: Session[]): void {
+    if (this.inputEmbodiments.length === 0) return;
+    for (const s of live) {
+      for (const a of this.liveActions(s)) {
+        if (a.type !== INPUT_CHUNK || a.state !== "executing") continue;
+        const total = (a.params.slots as Slot[]).length;
+        a.slot += 1;
+        a.progress = a.slot / total; // AWP-LIF-003
+        if (a.slot >= total) this.finish(s, a, "completed", {});
+        else if (this.mode === "lockstep") this.statusUpdate(s, a, { progress: round3(a.progress) });
+      }
+    }
+  }
+
+  private releaseInput(a: Action): void {
+    if (this.held.get(a.embodiment)?.length === 0) return;
+    this.applyDevice(a.embodiment, "release", undefined, a);
+  }
+
+  private applyDevice(emb: string, kind: "step" | "release", slot: Slot | undefined, a: Action | undefined): void {
+    const state = deviceState(slot, this.held.get(emb) ?? []);
+    this.held.set(emb, state.held);
+    this.sim.applyInput?.(emb, state);
+    this.hooks.input?.({
+      ts_mono_ns: this.now,
+      ...(this.mode === "lockstep" ? { tick: this.tick } : {}),
+      embodiment: emb,
+      kind,
+      ...(a ? { action_id: a.id } : {}),
+      ...(a && kind === "step" ? { slot: a.slot } : {}),
+      state,
+    });
+  }
+
+  // ---------------------------------------------------------------------------------------------
   // Reset
 
   private async rpcReset(s: Session, p: Json): Promise<Json> {
@@ -1472,7 +1610,7 @@ export class WorldHost<View = unknown> {
     }
     this.initialState = initial;
     if (opts.seed !== undefined) this.seed = opts.seed;
-    this.sim = await this.def.createSim({ seed: this.seed, initialState: this.initialState });
+    this.useSim(await this.def.createSim({ seed: this.seed, initialState: this.initialState }));
     if (this.mode === "lockstep") {
       this.tick = 0;
       for (const s of live) for (const g of s.grants.values()) if (!g.command) this.emitFrame(s, g, false);
