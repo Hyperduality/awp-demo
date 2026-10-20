@@ -1,7 +1,7 @@
 import { AwpClient, AwpError, jsonPayload } from "@hyperduality/awp";
 import { afterEach, describe, expect, it } from "vitest";
 import { type RunningWorld, serveWorld } from "../src/index.ts";
-import { gridworld } from "./gridworld.ts";
+import { gridworld, type StepProbe } from "./gridworld.ts";
 
 const TOKEN = "test-token-0123456789";
 let world: RunningWorld | undefined;
@@ -203,6 +203,54 @@ describe("streaming gridworld", () => {
     const w = await start("streaming");
     const c = new AwpClient({ url: w.url, agent: { name: "x", version: "0", vendor: "x" }, consumesModalities: [] });
     await expect(c.initialize(2000)).rejects.toBeDefined();
+  });
+});
+
+describe("an async sim", () => {
+  it("finishes every step of an advance, with its frames, before the result (AWP-TIM-003)", async () => {
+    const probe: StepProbe = { steps: 0, inFlight: 0, maxInFlight: 0 };
+    world = await serveWorld(gridworld("lockstep", { asyncStepMs: 15, probe }), {
+      port: 0,
+      token: TOKEN,
+      log: (l) => problems.push(l),
+    });
+    const trace: { dir: string; m: { method?: string; params?: { tick?: number }; result?: { tick?: number } } }[] = [];
+    const c = client(world.url, trace as unknown[]);
+    await c.initialize();
+    await c.openSession("lockstep", { embodiment: "avatar_0", subscribe: ["grid_view"] });
+    await c.submit("walk_to", { cell: [3, 0] });
+    await c.advance(3);
+    expect(probe.steps).toBe(3);
+    expect(probe.maxInFlight).toBe(1);
+    const incoming = trace.filter((t) => t.dir === "in");
+    const result = incoming.findIndex((t) => t.m.result?.tick === 3);
+    const frames = incoming
+      .map((t, i) => ({ i, tick: t.m.method === "obs.frame" ? t.m.params?.tick : undefined }))
+      .filter((f) => f.tick !== undefined && f.tick > 0);
+    expect(frames.map((f) => f.tick)).toEqual([1, 2, 3]);
+    expect(frames.every((f) => f.i < result)).toBe(true);
+    await c.close();
+  });
+
+  it("steps at most once per stepMs with fixed pacing, counting overruns instead of bursting", async () => {
+    const probe: StepProbe = { steps: 0, inFlight: 0, maxInFlight: 0 };
+    world = await serveWorld(gridworld("streaming", { asyncStepMs: 30, stepMs: 10, pacing: "fixed", probe }), {
+      port: 0,
+      token: TOKEN,
+      log: (l) => problems.push(l),
+    });
+    const c = client(world.url);
+    await c.initialize();
+    await c.openSession("streaming", { embodiment: "avatar_0", subscribe: ["grid_view"] });
+    const before = probe.steps;
+    await new Promise((r) => setTimeout(r, 400));
+    const steps = probe.steps - before;
+    expect(probe.maxInFlight).toBe(1);
+    // A burst would run 40 steps in 400 ms; each step takes 30 ms, so about 13 fit.
+    expect(steps).toBeLessThanOrEqual(15);
+    expect(steps).toBeGreaterThanOrEqual(8);
+    expect(world.host.overruns).toBeGreaterThan(0);
+    await c.close();
   });
 });
 
