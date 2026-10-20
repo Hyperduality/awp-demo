@@ -1,3 +1,7 @@
+import { createHash } from "node:crypto";
+import { mkdtempSync, readdirSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { AwpClient, AwpError, jsonPayload } from "@hyperduality/awp";
 import { afterEach, describe, expect, it } from "vitest";
 import { type RunningWorld, serveWorld } from "../src/index.ts";
@@ -251,6 +255,42 @@ describe("an async sim", () => {
     expect(steps).toBeGreaterThanOrEqual(8);
     expect(world.host.overruns).toBeGreaterThan(0);
     await c.close();
+  });
+});
+
+describe("binary observations", () => {
+  it("sends a binary payload as is and hashes its bytes in the audit log (AWP-AUD-001)", async () => {
+    const auditDir = mkdtempSync(join(tmpdir(), "awp-audit-"));
+    world = await serveWorld(gridworld("lockstep", { camera: true }), {
+      port: 0,
+      token: TOKEN,
+      auditDir,
+      log: (l) => problems.push(l),
+    });
+    const c = new AwpClient({
+      url: world.url,
+      token: TOKEN,
+      agent: { name: "test", version: "0.0.0", vendor: "awp-demo" },
+      consumesModalities: ["text/event+json", "image/jpeg"],
+    });
+    await c.initialize();
+    await c.openSession("lockstep", { embodiment: "avatar_0", subscribe: ["grid_view", "camera"] });
+    await c.submit("walk_to", { cell: [2, 0] });
+    await c.advance(2);
+    const camera = c.latest("camera")!.frame;
+    expect([...camera.payload]).toEqual([2, 0]);
+    await c.close();
+    const records = readdirSync(auditDir).flatMap((f) =>
+      readFileSync(join(auditDir, f), "utf8")
+        .trim()
+        .split("\n")
+        .map((l) => JSON.parse(l) as { kind: string; body: { channel_id?: number; payload_sha256?: string } }),
+    );
+    const frames = records.filter((r) => r.kind === "frame");
+    const hash = (b: Uint8Array | string) => createHash("sha256").update(b).digest("hex");
+    expect(frames.map((r) => r.body.payload_sha256)).toContain(hash(Uint8Array.from([2, 0])));
+    const json = JSON.stringify({ avatar: [2, 0], goal: [2, 0] });
+    expect(frames.map((r) => r.body.payload_sha256)).toContain(hash(json));
   });
 });
 

@@ -3,6 +3,11 @@ import type { FrameTree, WorldManifest } from "@hyperduality/awp";
 /** A value or a promise of one: a sim backed by another process steps asynchronously. */
 export type MaybePromise<T> = T | Promise<T>;
 
+/** A binary observation payload, such as an encoded image; the inline binding carries it as base64. */
+export interface BinaryPayload {
+  bytes: Uint8Array;
+}
+
 /** What an action run reports after each update. */
 export type RunStatus =
   | { progress?: number; clamped?: boolean }
@@ -37,7 +42,10 @@ export interface StartContext {
 export interface Sim<View = unknown> {
   /** Advance world dynamics (everything not driven by an action run). The host never overlaps two steps. */
   step(dtMs: number): MaybePromise<void>;
-  /** The JSON payload for one observation channel, as of now. A sim whose step is async caches what it returned. */
+  /**
+   * The payload for one observation channel, as of now: a JSON value, or `{ bytes }` for a binary modality
+   * such as image/jpeg. A sim whose step is async caches what it returned.
+   */
   observe(channel: string): unknown;
   /** World-specific admission checks (reach, envelopes, preconditions). */
   admit?(embodiment: string, type: string, params: Record<string, unknown>): AdmitVerdict;

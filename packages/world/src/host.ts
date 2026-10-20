@@ -20,7 +20,18 @@ import {
   type WorldManifest,
 } from "@hyperduality/awp";
 import type { ActionRun, Sim, WorldDefinition } from "./types.ts";
-import { decodeB64Json, jsonEqual, jsonPayloadB64, mintToken, redact, sha256Hex, stats } from "./util.ts";
+import {
+  decodeB64Json,
+  fromB64,
+  isBinaryPayload,
+  jsonEqual,
+  mintToken,
+  payloadBytes,
+  redact,
+  sha256Hex,
+  stats,
+  toB64,
+} from "./util.ts";
 
 type Id = number | string | null;
 type Json = Record<string, unknown>;
@@ -35,6 +46,8 @@ export interface FrameMeta {
   key: string;
   latestWins: boolean;
   streaming: boolean;
+  /** The payload is binary (an image, say), not JSON. */
+  binary: boolean;
 }
 
 export interface AuditRecord {
@@ -1281,7 +1294,7 @@ export class WorldHost<View = unknown> {
       channel_id: p.channel_id,
       seq,
       ts_mono_ns: p.ts_mono_ns,
-      payload_sha256: sha256Hex(String(p.payload_b64)),
+      payload_sha256: sha256Hex(fromB64(String(p.payload_b64))),
     });
   }
 
@@ -1621,12 +1634,13 @@ export class WorldHost<View = unknown> {
     g.degraded = false;
     const wantResync = resync || g.resync;
     g.resync = false;
+    const bytes = payloadBytes(payload);
     const params: Json = {
       channel_id: g.channelId,
       seq: g.seq,
       ts_mono_ns: this.clock(s),
       flags: wantResync ? 0b1001 : 0b0001,
-      payload_b64: jsonPayloadB64(payload),
+      payload_b64: toB64(bytes),
     };
     if (this.mode === "lockstep") params.tick = this.tick;
     const message = { jsonrpc: "2.0", method: "obs.frame", params };
@@ -1636,7 +1650,8 @@ export class WorldHost<View = unknown> {
       seq: g.seq,
       ts_mono_ns: params.ts_mono_ns,
       tick: params.tick,
-      payload_sha256: sha256Hex(params.payload_b64 as string),
+      // The hash covers the payload's bytes, not their base64 (AWP-AUD-001).
+      payload_sha256: sha256Hex(bytes),
     });
     this.out.push({
       kind: "send",
@@ -1647,6 +1662,7 @@ export class WorldHost<View = unknown> {
         key: `${s.id}:${g.channelId}`,
         latestWins: streaming && g.decl.loss_class === "latest-wins",
         streaming,
+        binary: isBinaryPayload(payload),
       },
     });
     if (streaming) this.activate(s);

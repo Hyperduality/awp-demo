@@ -18,6 +18,8 @@ export function gridworld(
     stepMs?: number;
     pacing?: "catch-up" | "fixed";
     probe?: StepProbe;
+    /** Add a binary `camera` channel whose payload is the avatar cell as two bytes, standing in for an image. */
+    camera?: boolean;
   } = {},
 ): WorldDefinition<{ avatar: number[] }> {
   const lockstep = mode !== "streaming";
@@ -29,8 +31,26 @@ export function gridworld(
     ...(lockstep ? { tick_policy: "on_tick" as const, tick_authority: "any_session" as const } : {}),
     capabilities: { seed: true, task: true },
     initial_states: ["default"],
-    embodiments: [{ id: "avatar_0", kind: "avatar", action_types: ["move", "walk_to"], channels: ["grid_view"] }],
+    embodiments: [
+      {
+        id: "avatar_0",
+        kind: "avatar",
+        action_types: ["move", "walk_to"],
+        channels: opts.camera ? ["grid_view", "camera"] : ["grid_view"],
+      },
+    ],
     observation_channels: [
+      ...(opts.camera
+        ? [
+            {
+              id: "camera",
+              modality: "image/jpeg",
+              rate_hz: streaming ? 20 : null,
+              loss_class: "latest-wins" as const,
+              schema: { width: 2, height: 1 },
+            },
+          ]
+        : []),
       {
         id: "grid_view",
         modality: "text/event+json",
@@ -105,7 +125,8 @@ export function gridworld(
             }, opts.asyncStepMs),
           );
         },
-        observe: () => ({ avatar: [...avatar], goal }),
+        observe: (channel) =>
+          channel === "camera" ? { bytes: Uint8Array.from(avatar) } : { avatar: [...avatar], goal },
         start(_e, type, params): ActionRun {
           if (type === "move") {
             const [dx, dy] = DIRS[params.direction as string]!;

@@ -2,3 +2,4 @@ export { type AuditRecord, type FrameMeta, type HostHooks, type HostOutput, Worl
 export { mulberry32 } from "./random.ts";
 export { type RunningWorld, type ServeOptions, serveWorld } from "./server.ts";
 export type * from "./types.ts";
+export { isBinaryPayload } from "./util.ts";
