@@ -1,0 +1,246 @@
+{
+  "embodiment": "player",
+  "subscribe": ["pov", "status", "scene"],
+  "moves": [
+    {
+      "type": "input_chunk",
+      "params": {
+        "slot_ms": 50,
+        "slots": [
+          {
+            "keys": ["KeyW"]
+          },
+          {
+            "keys": ["KeyW"]
+          },
+          {
+            "keys": ["KeyW"]
+          },
+          {
+            "keys": ["KeyW"]
+          },
+          {
+            "keys": ["KeyW"]
+          },
+          {
+            "keys": ["KeyW"]
+          },
+          {
+            "keys": ["KeyW"]
+          },
+          {
+            "keys": ["KeyW"]
+          },
+          {
+            "keys": ["KeyW"]
+          },
+          {
+            "keys": ["KeyW"]
+          },
+          {
+            "keys": ["KeyW"]
+          },
+          {
+            "keys": ["KeyW"]
+          },
+          {
+            "keys": ["KeyW"]
+          },
+          {
+            "keys": ["KeyW"]
+          },
+          {
+            "keys": ["KeyW"]
+          },
+          {
+            "keys": ["KeyW"]
+          },
+          {
+            "keys": ["KeyW"]
+          },
+          {
+            "keys": ["KeyW"]
+          },
+          {
+            "keys": ["KeyW"]
+          },
+          {
+            "keys": ["KeyW"]
+          }
+        ]
+      }
+    },
+    {
+      "type": "input_chunk",
+      "params": {
+        "slot_ms": 50,
+        "slots": [
+          {
+            "mouse_dx": 30
+          },
+          {
+            "mouse_dx": 30
+          },
+          {
+            "mouse_dx": 30
+          },
+          {
+            "mouse_dx": 30
+          },
+          {
+            "mouse_dx": 30
+          },
+          {
+            "mouse_dx": 30
+          },
+          {
+            "mouse_dx": 30
+          },
+          {
+            "mouse_dx": 30
+          },
+          {
+            "mouse_dx": 30
+          },
+          {
+            "mouse_dx": 30
+          },
+          {
+            "mouse_dx": 30
+          },
+          {
+            "mouse_dx": 30
+          },
+          {
+            "mouse_dx": 30
+          },
+          {
+            "mouse_dx": 30
+          },
+          {
+            "mouse_dx": 30
+          },
+          {
+            "mouse_dx": 30
+          },
+          {
+            "mouse_dx": 30
+          },
+          {
+            "mouse_dx": 30
+          },
+          {
+            "mouse_dx": 30
+          },
+          {
+            "mouse_dx": 30
+          }
+        ]
+      }
+    },
+    {
+      "type": "input_chunk",
+      "params": {
+        "slot_ms": 50,
+        "slots": [
+          {
+            "keys": ["KeyS"],
+            "mouse_dx": -30
+          },
+          {
+            "keys": ["KeyS"],
+            "mouse_dx": -30
+          },
+          {
+            "keys": ["KeyS"],
+            "mouse_dx": -30
+          },
+          {
+            "keys": ["KeyS"],
+            "mouse_dx": -30
+          },
+          {
+            "keys": ["KeyS"],
+            "mouse_dx": -30
+          },
+          {
+            "keys": ["KeyS"],
+            "mouse_dx": -30
+          },
+          {
+            "keys": ["KeyS"],
+            "mouse_dx": -30
+          },
+          {
+            "keys": ["KeyS"],
+            "mouse_dx": -30
+          },
+          {
+            "keys": ["KeyS"],
+            "mouse_dx": -30
+          },
+          {
+            "keys": ["KeyS"],
+            "mouse_dx": -30
+          },
+          {
+            "keys": ["KeyS"],
+            "mouse_dx": -30
+          },
+          {
+            "keys": ["KeyS"],
+            "mouse_dx": -30
+          },
+          {
+            "keys": ["KeyS"],
+            "mouse_dx": -30
+          },
+          {
+            "keys": ["KeyS"],
+            "mouse_dx": -30
+          },
+          {
+            "keys": ["KeyS"],
+            "mouse_dx": -30
+          },
+          {
+            "keys": ["KeyS"],
+            "mouse_dx": -30
+          },
+          {
+            "keys": ["KeyS"],
+            "mouse_dx": -30
+          },
+          {
+            "keys": ["KeyS"],
+            "mouse_dx": -30
+          },
+          {
+            "keys": ["KeyS"],
+            "mouse_dx": -30
+          },
+          {
+            "keys": ["KeyS"],
+            "mouse_dx": -30
+          }
+        ]
+      }
+    }
+  ],
+  "extended_min_ms": 900,
+  "extended_min_ticks": 20,
+  "invalid": {
+    "type": "input_chunk",
+    "params": {
+      "slot_ms": 33,
+      "slots": [{}]
+    }
+  },
+  "initial_state": "conformance_room",
+  "operator": {
+    "estop_engage": "kill -USR1 $WORLD_PID",
+    "estop_release": "kill -USR2 $WORLD_PID"
+  },
+  "audit_dir": "conformance/audit",
+  "max_wait_s": 120
+}

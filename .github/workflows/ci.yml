@@ -27,9 +27,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        demo: [{ name: sorter, port: 8712 }, { name: vault, port: 8713 }, { name: dispatch, port: 8714 }]
+        demo:
+          - { name: sorter, port: 8712 }
+          - { name: vault, port: 8713 }
+          - { name: dispatch, port: 8714 }
+          - { name: minecraft, port: 8715, args: "--profile game" }
     env:
       AWP_TOKEN: ci-conformance-token
+      # CI has no GPU or game: the Minecraft world runs on its fake engine here.
+      AWP_MINECRAFT_SIM: fake
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -49,7 +55,7 @@ jobs:
         run: |
           export WORLD_PID=$(lsof -ti tcp:${{ matrix.demo.port }} -sTCP:LISTEN | head -1)
           uvx --prerelease allow awp-conformance==0.1.0a9 world ws://127.0.0.1:${{ matrix.demo.port }} \
-            --token "$AWP_TOKEN" --fixture conformance/fixture.json --out conformance/report
+            --token "$AWP_TOKEN" --fixture conformance/fixture.json --out conformance/report ${{ matrix.demo.args }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:

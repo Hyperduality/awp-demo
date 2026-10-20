@@ -1,0 +1,59 @@
+[
+  {
+    "scenario": "slots",
+    "mode": "streaming",
+    "action_id": "a-cc3a3c549147ad6b",
+    "state": "completed"
+  },
+  {
+    "scenario": "replace (replaced)",
+    "mode": "streaming",
+    "action_id": "a-8b1c19c3f1041e31",
+    "state": "preempted"
+  },
+  {
+    "scenario": "replace (replacement)",
+    "mode": "streaming",
+    "action_id": "a-5206e5591a570476",
+    "state": "completed"
+  },
+  {
+    "scenario": "cancel",
+    "mode": "streaming",
+    "action_id": "a-9349b14a1b3b438d",
+    "state": "cancelled",
+    "reason": "cancelled_by_agent"
+  },
+  {
+    "scenario": "safe state",
+    "mode": "streaming",
+    "action_id": "a-07e860b2161a84e4",
+    "state": "failed",
+    "reason": "connection_lost"
+  },
+  {
+    "scenario": "slots",
+    "mode": "lockstep",
+    "action_id": "a-b980e544d330348a",
+    "state": "completed"
+  },
+  {
+    "scenario": "replace (replaced)",
+    "mode": "lockstep",
+    "action_id": "a-ade271944fb11a65",
+    "state": "preempted"
+  },
+  {
+    "scenario": "replace (replacement)",
+    "mode": "lockstep",
+    "action_id": "a-8a02ce223f33e784",
+    "state": "completed"
+  },
+  {
+    "scenario": "cancel",
+    "mode": "lockstep",
+    "action_id": "a-07d947bb435257f1",
+    "state": "cancelled",
+    "reason": "cancelled_by_agent"
+  }
+]

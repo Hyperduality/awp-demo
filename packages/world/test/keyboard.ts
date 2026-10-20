@@ -1,5 +1,5 @@
-import { readVendored, type WorldManifest } from "@hyperduality/awp";
-import type { DeviceState } from "../src/input.ts";
+import type { WorldManifest } from "@hyperduality/awp";
+import { type DeviceState, narrowInputChunk } from "../src/input.ts";
 import type { Sim, WorldDefinition } from "../src/types.ts";
 
 export const KEYS = ["KeyW", "KeyA", "KeyS", "KeyD", "ShiftLeft", "Space", "MouseLeft"];
@@ -10,30 +10,15 @@ export interface Applied {
   state: DeviceState;
 }
 
-interface InputSchema {
-  properties: {
-    slot_ms: Record<string, unknown>;
-    slots: { maxItems: number; items: { properties: Record<string, Record<string, unknown>> } };
-  } & Record<string, unknown>;
-  $defs?: unknown;
-}
-
-/**
- * The normative input_chunk params schema narrowed the ways AWP-GAM-001 allows. Its key-name enum
- * moves to the manifest's `$defs`, which a params schema's `$ref` resolves against.
- */
-export function narrowedInputSchema(
-  slotMs: number,
-  keys: string[] = KEYS,
-): { params: InputSchema; defs: Record<string, unknown> } {
-  const params = structuredClone(readVendored("v0.1/profiles/input-chunk.schema.json")) as InputSchema;
-  delete params.$defs;
-  params.properties.slot_ms.const = slotMs;
-  params.properties.slots.maxItems = 20;
-  const slot = params.properties.slots.items.properties;
-  for (const f of ["scroll_steps", "sticks", "triggers"]) delete slot[f];
-  slot.keys!.items = { $ref: "#/$defs/input_key_name" };
-  return { params, defs: { input_key_name: { enum: keys } } };
+/** The input_chunk params schema narrowed the ways AWP-GAM-001 allows, as the manifest declares it. */
+export function narrowedInputSchema(slotMs: number, keys: string[] = KEYS) {
+  const { params_schema, $defs } = narrowInputChunk({
+    slotMs,
+    maxSlots: 20,
+    keys,
+    without: ["scroll_steps", "sticks", "triggers"],
+  });
+  return { params: params_schema as { properties: Record<string, unknown> }, defs: $defs };
 }
 
 /** A world whose only action is device input; its sim records what it was given and shows the held keys. */

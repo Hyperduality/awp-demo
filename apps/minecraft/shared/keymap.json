@@ -1,0 +1,26 @@
+{
+  "description": "Device input to MineRL env actions, shared by the sidecar and the policy server. A held key sets its action to 1 for the step; mouse counts become camera degrees through deg_per_count, [pitch from mouse_dy, yaw from mouse_dx].",
+  "deg_per_count": 0.15,
+  "max_camera_deg": 180,
+  "keys": {
+    "KeyW": "forward",
+    "KeyA": "left",
+    "KeyS": "back",
+    "KeyD": "right",
+    "Space": "jump",
+    "ShiftLeft": "sneak",
+    "ControlLeft": "sprint",
+    "KeyE": "inventory",
+    "MouseLeft": "attack",
+    "MouseRight": "use",
+    "Digit1": "hotbar.1",
+    "Digit2": "hotbar.2",
+    "Digit3": "hotbar.3",
+    "Digit4": "hotbar.4",
+    "Digit5": "hotbar.5",
+    "Digit6": "hotbar.6",
+    "Digit7": "hotbar.7",
+    "Digit8": "hotbar.8",
+    "Digit9": "hotbar.9"
+  }
+}
