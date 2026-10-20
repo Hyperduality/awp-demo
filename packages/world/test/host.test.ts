@@ -206,4 +206,44 @@ describe("streaming gridworld", () => {
   });
 });
 
-void AwpError;
+describe("a world offering both time models", () => {
+  async function both() {
+    world = await serveWorld(gridworld("both"), { port: 0, token: TOKEN, log: (l) => problems.push(l) });
+    return world;
+  }
+
+  it("runs a lockstep session, then a streaming one (AWP-TIM-008)", async () => {
+    const w = await both();
+    const a = client(w.url);
+    await a.initialize();
+    await a.openSession("lockstep", { embodiment: "avatar_0", subscribe: ["grid_view"] });
+    const walk = await a.submit("walk_to", { cell: [2, 0] });
+    await a.advance(2);
+    expect(walk.state).toBe("completed");
+    await a.close();
+
+    const b = client(w.url);
+    await b.initialize();
+    const ready = await b.openSession("streaming", { embodiment: "avatar_0", subscribe: ["grid_view"] });
+    expect(ready.granted.channels[0]?.rate_hz).toBe(20);
+    const back = await b.submit("walk_to", { cell: [0, 0] });
+    await back.settled();
+    expect(back.state).toBe("completed");
+    await b.close();
+  });
+
+  it("refuses a session in the other time model while one is bound (AWP-TIM-001)", async () => {
+    const w = await both();
+    const a = client(w.url);
+    await a.initialize();
+    await a.openSession("streaming", { embodiment: "avatar_0", subscribe: ["grid_view"] });
+    const b = client(w.url);
+    await b.initialize();
+    const refused = await b.openSession("lockstep", {}).catch((e: unknown) => e);
+    expect((refused as AwpError).errorName).toBe("AWP_TIME_MODEL_UNSUPPORTED");
+    const observer = await b.openSession("streaming", { subscribe: ["grid_view"] });
+    expect(observer.granted.action_types).toEqual([]);
+    await b.close();
+    await a.close();
+  });
+});
