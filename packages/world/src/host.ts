@@ -867,6 +867,10 @@ export class WorldHost<View = unknown> {
       rate = decl.rate_hz ?? 10;
       if (requestedHz !== undefined) rate = Math.min(rate, requestedHz);
       if (!command && c.maxObsRateHz !== undefined) rate = Math.min(rate, c.maxObsRateHz);
+    } else if (requestedHz !== undefined && decl.rate_hz != null) {
+      // In lockstep a channel is per-tick unless a rate is asked of one declared with a rate (AWP-NEG-003).
+      rate = Math.min(decl.rate_hz, requestedHz);
+      if (!command && c.maxObsRateHz !== undefined) rate = Math.min(rate, c.maxObsRateHz);
     }
     const g: Grant = existing ?? {
       channel: decl.id,
@@ -875,7 +879,8 @@ export class WorldHost<View = unknown> {
       rateHz: rate,
       command,
       seq: 0,
-      nextDueNs: this.now,
+      // A lockstep grant opens with a frame; a rated one has its next a period of simulated time later.
+      nextDueNs: this.mode === "lockstep" ? this.clock(s) + (rate === null ? 0 : 1e9 / rate) : this.now,
       resync: false,
       lastCmdSeq: 0,
       lastDeliveredNs: this.now,
@@ -1127,9 +1132,18 @@ export class WorldHost<View = unknown> {
     this.advanceInputs(live);
     for (const s of live) {
       this.promoteQueued(s);
-      for (const g of s.grants.values()) if (!g.command) this.emitFrame(s, g, false);
+      for (const g of s.grants.values()) if (!g.command && this.dueInLockstep(s, g)) this.emitFrame(s, g, false);
     }
     this.hooks.changed?.();
+  }
+
+  /** A per-tick channel has a frame every advance; one granted a rate, on that period of simulated time. */
+  private dueInLockstep(s: Session, g: Grant): boolean {
+    if (g.rateHz === null) return true;
+    const t = this.clock(s);
+    if (t < g.nextDueNs) return false;
+    g.nextDueNs = Math.max(g.nextDueNs + 1e9 / g.rateHz, t);
+    return true;
   }
 
   /** At the start of an advance: deferred aborts end, lockstep replacements take effect, staged actions begin. */
