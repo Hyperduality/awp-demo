@@ -1,5 +1,5 @@
 /**
- * A sans-IO AWP world host (Core World, spec 0.1-draft.11). Every entry point takes the current
+ * A sans-IO AWP world host (Core World, spec 0.1-draft.12). Every entry point takes the current
  * monotonic time in ns and returns the messages to send; the host never reads a clock or does IO.
  * The host owns the protocol — sessions, grants, lifecycle, time — and a `Sim` owns the physics.
  */

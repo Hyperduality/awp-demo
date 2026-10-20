@@ -1,15 +1,15 @@
 {
   "suite": {
     "name": "awp-conformance",
-    "version": "0.1.0a9"
+    "version": "0.1.0a10"
   },
-  "specification": "0.1-draft.11",
+  "specification": "0.1-draft.12",
   "target": "ws://127.0.0.1:8714",
   "side": "world",
-  "generated": "2026-10-20T01:51:15Z",
+  "generated": "2026-10-20T15:30:44Z",
   "claim": {
     "status": "self-assessed",
-    "wording": "Core World (streaming), self-assessed against 0.1-draft.11; awp-conformance 0.1.0a9 passes every assertion it ran",
+    "wording": "Core World (streaming), self-assessed against 0.1-draft.12; awp-conformance 0.1.0a10 passes every assertion it ran",
     "classes": ["Core World"],
     "modes": ["streaming"],
     "failed": [],
@@ -286,7 +286,7 @@
       "id": "AWP-CLK-007",
       "level": "MUST",
       "outcome": "pass",
-      "detail": "39 check(s): streaming/admission-refusals, streaming/audit-log, streaming/cancel-executing, streaming/cancel-pending, streaming/close-during-motion, streaming/close-outranks-cancel, streaming/connection-without-session, streaming/deadlines, streaming/embodiment-binding, streaming/estop, streaming/grants, streaming/heartbeat, streaming/idempotency, streaming/isolation, streaming/lifecycle-complete, streaming/max-obs-rate, streaming/multi-bind, streaming/preempt-default, streaming/queue, streaming/replace, streaming/reset, streaming/resume-replay, streaming/session-open, streaming/stale-intent, streaming/stream-delivery, streaming/subscriptions, streaming/task, streaming/telemetry, streaming/window-expiry"
+      "detail": "43 check(s): streaming/admission-refusals, streaming/audit-log, streaming/cancel-executing, streaming/cancel-pending, streaming/close-during-motion, streaming/close-outranks-cancel, streaming/connection-loss, streaming/connection-without-session, streaming/deadlines, streaming/embodiment-binding, streaming/estop, streaming/grants, streaming/heartbeat, streaming/idempotency, streaming/isolation, streaming/lifecycle-complete, streaming/max-obs-rate, streaming/multi-bind, streaming/one-session-per-connection, streaming/preempt-default, streaming/queue, streaming/replace, streaming/reset, streaming/resume-replay, streaming/session-open, streaming/stale-intent, streaming/stream-delivery, streaming/subscriptions, streaming/task, streaming/telemetry, streaming/transfer-offered, streaming/window-expiry"
     },
     {
       "id": "AWP-CLK-008",
@@ -1018,7 +1018,7 @@
       "id": "AWP-SAF-001",
       "level": "MUST",
       "outcome": "pass",
-      "detail": "37 check(s): streaming/admission-refusals, streaming/audit-log, streaming/cancel-executing, streaming/cancel-pending, streaming/close-during-motion, streaming/close-outranks-cancel, streaming/deadlines, streaming/embodiment-binding, streaming/estop, streaming/grants, streaming/heartbeat, streaming/idempotency, streaming/isolation, streaming/lifecycle-complete, streaming/max-obs-rate, streaming/multi-bind, streaming/preempt-default, streaming/queue, streaming/replace, streaming/reset, streaming/resume-replay, streaming/session-open, streaming/stale-intent, streaming/stream-delivery, streaming/subscriptions, streaming/task, streaming/telemetry, streaming/window-expiry"
+      "detail": "41 check(s): streaming/admission-refusals, streaming/audit-log, streaming/cancel-executing, streaming/cancel-pending, streaming/close-during-motion, streaming/close-outranks-cancel, streaming/connection-loss, streaming/deadlines, streaming/embodiment-binding, streaming/estop, streaming/grants, streaming/heartbeat, streaming/idempotency, streaming/isolation, streaming/lifecycle-complete, streaming/max-obs-rate, streaming/multi-bind, streaming/one-session-per-connection, streaming/preempt-default, streaming/queue, streaming/replace, streaming/reset, streaming/resume-replay, streaming/session-open, streaming/stale-intent, streaming/stream-delivery, streaming/subscriptions, streaming/task, streaming/telemetry, streaming/transfer-offered, streaming/window-expiry"
     },
     {
       "id": "AWP-SAF-002",

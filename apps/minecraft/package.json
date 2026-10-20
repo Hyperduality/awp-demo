@@ -20,7 +20,7 @@
     "@awp-demo/world": "workspace:*",
     "@gravity-ui/icons": "^2.22.0",
     "@heroui/react": "^3.2.6",
-    "@hyperduality/awp": "0.1.0-alpha.5",
+    "@hyperduality/awp": "0.1.0-alpha.6",
     "ai": "^7.0.118",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

@@ -62,7 +62,7 @@ An LLM controller for a world that waits takes one turn per message (`createLlmC
 
 ## Conformance
 
-Sorter, Vault and Dispatch each pass every assertion of awp-conformance 0.1.0a9 (0.1-draft.11) for Core World in its time model. The claim is "self-assessed against 0.1-draft.11": the suite leaves a few requirements untested, as listed in each report. Reports and fixtures are in `apps/<demo>/conformance/`. Minecraft makes no claim yet: it targets Core World and the game profile in both time models under 0.1-draft.12, which no release of the suite covers yet. In CI it runs on its fake engine; its fixture and its device-input evidence are in `apps/minecraft/conformance/`.
+Each world passes every assertion that awp-conformance 0.1.0a10 (0.1-draft.12) runs against it. Sorter, Vault and Dispatch claim Core World in their time model; Minecraft claims Core World and the game profile in both, run against the real game (CI runs it on its fake engine). Each claim is "self-assessed against 0.1-draft.12": the suite leaves a few requirements untested, as listed in each report. Reports and fixtures are in `apps/<demo>/conformance/`, and Minecraft's device-input evidence for AWP-GAM-002..004 is in `apps/minecraft/conformance/evidence/`.
 
 ```bash
 pnpm --filter sorter world                       # in one shell

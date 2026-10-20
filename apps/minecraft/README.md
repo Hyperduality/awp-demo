@@ -49,6 +49,18 @@ The controllers, highest priority first:
 
 If the sidecar dies, every session ends with `world_shutdown` and the game starts again for the next session or reset.
 
+## Conformance
+
+**Core World + game (lockstep, streaming), self-assessed against 0.1-draft.12; awp-conformance 0.1.0a10 passes every assertion it ran**, against the real game. The report is [`conformance/report.json`](conformance/report.json), and it lists what the suite leaves untested. The suite takes AWP-GAM-002..004 as manual evidence, which is in [`conformance/evidence/`](conformance/evidence/README.md).
+
+Run it in WSL or on Linux, because the fixture engages the e-stop with `kill`:
+
+```bash
+AWP_AUDIT_DIR=conformance/audit pnpm world &      # in apps/minecraft; wait for the game to start
+export WORLD_PID=$(ss -ltnp "sport = :8715" | grep -o "pid=[0-9]*" | head -1 | cut -d= -f2)
+uvx --prerelease allow awp-conformance==0.1.0a10 world ws://127.0.0.1:8715 --token awp-demo-local-token   --fixture conformance/fixture.json --profile game --out conformance/report
+```
+
 ## Initial states
 
 | State | |
