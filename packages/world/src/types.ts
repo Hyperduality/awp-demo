@@ -1,5 +1,8 @@
 import type { FrameTree, WorldManifest } from "@hyperduality/awp";
 
+/** A value or a promise of one: a sim backed by another process steps asynchronously. */
+export type MaybePromise<T> = T | Promise<T>;
+
 /** What an action run reports after each update. */
 export type RunStatus =
   | { progress?: number; clamped?: boolean }
@@ -32,9 +35,9 @@ export interface StartContext {
 
 /** The simulation behind a world. Pure state; the host decides when things happen. */
 export interface Sim<View = unknown> {
-  /** Advance world dynamics (everything not driven by an action run). */
-  step(dtMs: number): void;
-  /** The JSON payload for one observation channel, as of now. */
+  /** Advance world dynamics (everything not driven by an action run). The host never overlaps two steps. */
+  step(dtMs: number): MaybePromise<void>;
+  /** The JSON payload for one observation channel, as of now. A sim whose step is async caches what it returned. */
   observe(channel: string): unknown;
   /** World-specific admission checks (reach, envelopes, preconditions). */
   admit?(embodiment: string, type: string, params: Record<string, unknown>): AdmitVerdict;
@@ -57,11 +60,16 @@ export interface CreateSimOptions {
 
 export interface WorldDefinition<View = unknown> {
   manifest: WorldManifest;
-  createSim(opts: CreateSimOptions): Sim<View>;
+  createSim(opts: CreateSimOptions): MaybePromise<Sim<View>>;
   /** Lockstep: simulated time per advance (default 50 ms). */
   tickMs?: number;
   /** Streaming: fixed sim step (default 1000/60 ms). */
   stepMs?: number;
+  /**
+   * Streaming: `catch-up` (default) runs a step for every `stepMs` that passed, in a burst after a stall;
+   * `fixed` runs at most one step per `stepMs`, counting an overrun instead of bursting.
+   */
+  pacing?: "catch-up" | "fixed";
   frameTree?: FrameTree;
   /** Default 5000 ms. */
   heartbeatIntervalMs?: number;

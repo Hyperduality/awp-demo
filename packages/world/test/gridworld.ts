@@ -1,10 +1,24 @@
 import type { WorldManifest } from "@hyperduality/awp";
 import type { ActionRun, Sim, WorldDefinition } from "../src/types.ts";
 
+/** Counts async steps, and the most ever in flight at once. */
+export interface StepProbe {
+  steps: number;
+  inFlight: number;
+  maxInFlight: number;
+}
+
 /** The spec's example gridworld (examples/v0.1/traces/core-lockstep.jsonl), in either time model or both. */
 export function gridworld(
   mode: "lockstep" | "streaming" | "both",
-  opts: { maxBasisAgeMs?: number } = {},
+  opts: {
+    maxBasisAgeMs?: number;
+    /** Make each sim step async, taking this long. */
+    asyncStepMs?: number;
+    stepMs?: number;
+    pacing?: "catch-up" | "fixed";
+    probe?: StepProbe;
+  } = {},
 ): WorldDefinition<{ avatar: number[] }> {
   const lockstep = mode !== "streaming";
   const streaming = mode !== "lockstep";
@@ -69,12 +83,28 @@ export function gridworld(
     manifest,
     // Both models walk at one cell per 50 ms, so one advance moves one cell either way.
     tickMs: mode === "both" ? 50 : 1,
+    ...(opts.stepMs !== undefined ? { stepMs: opts.stepMs } : {}),
+    ...(opts.pacing ? { pacing: opts.pacing } : {}),
     createSim(): Sim<{ avatar: number[] }> {
       const avatar = [0, 0];
       const goal = [2, 0];
       const DIRS: Record<string, [number, number]> = { north: [0, 1], south: [0, -1], east: [1, 0], west: [-1, 0] };
       return {
-        step() {},
+        step() {
+          if (opts.asyncStepMs === undefined) return;
+          const p = opts.probe;
+          if (p) {
+            p.steps += 1;
+            p.inFlight += 1;
+            p.maxInFlight = Math.max(p.maxInFlight, p.inFlight);
+          }
+          return new Promise<void>((resolve) =>
+            setTimeout(() => {
+              if (p) p.inFlight -= 1;
+              resolve();
+            }, opts.asyncStepMs),
+          );
+        },
         observe: () => ({ avatar: [...avatar], goal }),
         start(_e, type, params): ActionRun {
           if (type === "move") {

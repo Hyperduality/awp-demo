@@ -68,6 +68,8 @@ export async function serveWorld<View>(def: WorldDefinition<View>, opts: ServeOp
       invalid: (schema, problems) => log(`outgoing ${schema} failed its sender form: ${problems.join("; ")}`),
     },
   });
+  await host.ready();
+  const fault = (e: unknown) => log(`host error: ${e instanceof Error ? (e.stack ?? e.message) : String(e)}`);
 
   const wss = new WebSocketServer({
     port: opts.port,
@@ -138,7 +140,7 @@ export async function serveWorld<View>(def: WorldDefinition<View>, opts: ServeOp
   wss.on("connection", (ws) => {
     const id = ++connCounter;
     sockets.set(id, ws);
-    host.connect(id, monotonicNs());
+    host.connect(id, monotonicNs()).catch(fault);
     ws.on("message", (data, isBinary) => {
       if (isBinary) {
         ws.close(1002, "AWP_MALFORMED");
@@ -152,25 +154,36 @@ export async function serveWorld<View>(def: WorldDefinition<View>, opts: ServeOp
         /* the host answers the parse error */
       }
       tap(id, "agent", parsed, text.length);
-      apply(host.receiveText(id, text, monotonicNs()));
+      host.receiveText(id, text, monotonicNs()).then(apply, fault);
     });
     ws.on("close", () => {
       sockets.delete(id);
       held.delete(id);
-      apply(host.disconnect(id, monotonicNs()));
+      host.disconnect(id, monotonicNs()).then(apply, fault);
     });
     ws.on("error", () => ws.terminate());
   });
 
-  const timer = setInterval(() => {
-    apply(host.advance(monotonicNs()));
-    for (const [conn, h] of held) {
-      const ws = sockets.get(conn);
-      if (!ws || ws.bufferedAmount > HIGH_WATER) continue;
-      for (const o of h.values()) write(ws, conn, o);
-      held.delete(conn);
-    }
-  }, 2);
+  // The timer re-arms only after an advance finishes, so a slow async step delays it rather than piling up.
+  let stopped = false;
+  let timer: NodeJS.Timeout | undefined;
+  const pump = () => {
+    host
+      .advance(monotonicNs())
+      .then((outputs) => {
+        apply(outputs);
+        for (const [conn, h] of held) {
+          const ws = sockets.get(conn);
+          if (!ws || ws.bufferedAmount > HIGH_WATER) continue;
+          for (const o of h.values()) write(ws, conn, o);
+          held.delete(conn);
+        }
+      }, fault)
+      .finally(() => {
+        if (!stopped) timer = setTimeout(pump, 2);
+      });
+  };
+  pump();
 
   // Inspector: manifest, sessions, render view, operator commands.
   let viewTimer: NodeJS.Timeout | undefined;
@@ -184,14 +197,14 @@ export async function serveWorld<View>(def: WorldDefinition<View>, opts: ServeOp
     // Clocks and sequence numbers move without structural changes; refresh them a few times a second.
     stateTimer = setInterval(publishWorld, 250);
     const refreshLayout = () => layout.set(host.sim.staticView?.() ?? null);
-    inspector.handle(WorldCommand.reset, (args) => {
+    inspector.handle(WorldCommand.reset, async (args) => {
       const a = (args ?? {}) as { initialState?: string; seed?: number };
-      apply(host.operatorReset(monotonicNs(), a));
+      apply(await host.operatorReset(monotonicNs(), a));
       refreshLayout();
       return host.describe();
     });
-    inspector.handle(WorldCommand.estopEngage, () => apply(host.engageEStop(monotonicNs())));
-    inspector.handle(WorldCommand.estopRelease, () => apply(host.releaseEStop(monotonicNs())));
+    inspector.handle(WorldCommand.estopEngage, async () => apply(await host.engageEStop(monotonicNs())));
+    inspector.handle(WorldCommand.estopRelease, async () => apply(await host.releaseEStop(monotonicNs())));
     inspector.handle(WorldCommand.operator, (args) => {
       const a = args as { name: string; args?: unknown };
       return host.sim.operator?.(a.name, a.args);
@@ -201,8 +214,8 @@ export async function serveWorld<View>(def: WorldDefinition<View>, opts: ServeOp
     worldState?.set({ url, ...host.describe() });
   }
 
-  const onUsr1 = () => apply(host.engageEStop(monotonicNs()));
-  const onUsr2 = () => apply(host.releaseEStop(monotonicNs()));
+  const onUsr1 = () => void host.engageEStop(monotonicNs()).then(apply, fault);
+  const onUsr2 = () => void host.releaseEStop(monotonicNs()).then(apply, fault);
   if (opts.operatorSignals) {
     process.on("SIGUSR1", onUsr1);
     process.on("SIGUSR2", onUsr2);
@@ -218,7 +231,8 @@ export async function serveWorld<View>(def: WorldDefinition<View>, opts: ServeOp
     port,
     inspector,
     async close() {
-      clearInterval(timer);
+      stopped = true;
+      clearTimeout(timer);
       process.off("SIGUSR1", onUsr1);
       process.off("SIGUSR2", onUsr2);
       if (viewTimer) clearInterval(viewTimer);

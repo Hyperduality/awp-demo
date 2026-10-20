@@ -187,9 +187,11 @@ export class WorldHost<View = unknown> {
   readonly manifest: WorldManifest;
   /** The time model sessions run in now. A world offering both switches only while no session is bound. */
   mode: TimeModel;
-  sim: Sim<View>;
+  sim!: Sim<View>;
   tick = 0;
   eStop = false;
+  /** Streaming steps that started more than a step late (fixed pacing). */
+  overruns = 0;
 
   private readonly def: WorldDefinition<View>;
   private readonly modes: TimeModel[];
@@ -197,6 +199,9 @@ export class WorldHost<View = unknown> {
   private readonly validateOut: boolean;
   private readonly tickNs: number;
   private readonly stepNs: number;
+  private readonly pacing: "catch-up" | "fixed";
+  private readonly started: Promise<void>;
+  private queue: Promise<unknown> = Promise.resolve();
   private readonly heartbeatMs: number;
   private readonly windowMs: number;
   private readonly watchdogMs: number | undefined;
@@ -233,6 +238,7 @@ export class WorldHost<View = unknown> {
     this.mode = this.modes[0]!;
     this.tickNs = Math.round((def.tickMs ?? 50) * 1e6);
     this.stepNs = Math.round((def.stepMs ?? 1000 / 60) * 1e6);
+    this.pacing = def.pacing ?? "catch-up";
     this.heartbeatMs = def.heartbeatIntervalMs ?? 5000;
     this.windowMs = def.reconnectWindowMs ?? 30000;
     this.watchdogMs = def.manifest.safety_policy.safe_state?.watchdog_ms;
@@ -245,13 +251,66 @@ export class WorldHost<View = unknown> {
       this.channels.set(c.id, c);
     this.initialState = def.manifest.initial_states?.[0] ?? "default";
     this.seed = def.defaultSeed ?? 1;
-    this.sim = def.createSim({ seed: this.seed, initialState: this.initialState });
+    const first = def.createSim({ seed: this.seed, initialState: this.initialState });
+    if (first instanceof Promise)
+      this.started = first.then((sim) => {
+        this.sim = sim;
+      });
+    else {
+      this.sim = first;
+      this.started = Promise.resolve();
+    }
+  }
+
+  /** Resolves once the first sim exists. */
+  ready(): Promise<void> {
+    return this.started;
   }
 
   // ---------------------------------------------------------------------------------------------
-  // Entry points
+  // Entry points. They run one at a time, in call order, so an async step never overlaps a message.
 
-  connect(conn: number, now: number): void {
+  connect(conn: number, now: number): Promise<void> {
+    return this.serial(() => this.onConnect(conn, now));
+  }
+
+  disconnect(conn: number, now: number): Promise<HostOutput[]> {
+    return this.serial(() => this.onDisconnect(conn, now));
+  }
+
+  receiveText(conn: number, text: string, now: number): Promise<HostOutput[]> {
+    return this.serial(() => this.onText(conn, text, now));
+  }
+
+  /** Timers: streaming physics and frames, deadlines, watchdogs, heartbeats, retention. */
+  advance(now: number): Promise<HostOutput[]> {
+    return this.serial(() => this.onAdvance(now));
+  }
+
+  engageEStop(now: number): Promise<HostOutput[]> {
+    return this.serial(() => this.onEStop(now));
+  }
+
+  releaseEStop(now: number): Promise<HostOutput[]> {
+    return this.serial(() => this.onEStopRelease(now));
+  }
+
+  /** `world.reset` on behalf of the operator (the UI), not a session. */
+  operatorReset(now: number, opts: { initialState?: string; seed?: number } = {}): Promise<HostOutput[]> {
+    return this.serial(async () => {
+      this.now = now;
+      await this.resetWorld("operator", opts);
+      return this.drain();
+    });
+  }
+
+  private serial<T>(fn: () => T | Promise<T>): Promise<T> {
+    const run = this.queue.then(fn);
+    this.queue = run.catch(() => undefined);
+    return run;
+  }
+
+  private onConnect(conn: number, now: number): void {
     this.now = now;
     this.conns.set(conn, {
       id: conn,
@@ -266,7 +325,7 @@ export class WorldHost<View = unknown> {
     });
   }
 
-  disconnect(conn: number, now: number): HostOutput[] {
+  private onDisconnect(conn: number, now: number): HostOutput[] {
     this.now = now;
     const c = this.conns.get(conn);
     if (!c) return this.drain();
@@ -276,7 +335,7 @@ export class WorldHost<View = unknown> {
     return this.drain();
   }
 
-  receiveText(conn: number, text: string, now: number): HostOutput[] {
+  private async onText(conn: number, text: string, now: number): Promise<HostOutput[]> {
     this.now = now;
     const c = this.conns.get(conn);
     if (!c) return this.drain();
@@ -331,7 +390,7 @@ export class WorldHost<View = unknown> {
     const id = m.id as Id;
     this.currentId = id;
     try {
-      const result = this.onRequest(c, method, m.params ?? {}, id);
+      const result = await this.onRequest(c, method, m.params ?? {}, id);
       if (result !== undefined) this.result(c, id, method, result);
     } catch (e) {
       if (e instanceof AwpFailure) {
@@ -353,18 +412,32 @@ export class WorldHost<View = unknown> {
     return this.drain();
   }
 
-  /** Timers: streaming physics and frames, deadlines, watchdogs, heartbeats, retention. */
-  advance(now: number): HostOutput[] {
+  private async onAdvance(now: number): Promise<HostOutput[]> {
     this.now = now;
     if (this.mode === "streaming") {
       if (this.lastAdvanceNs === undefined) this.lastAdvanceNs = now;
-      let budget = now - this.lastAdvanceNs;
-      while (budget >= this.stepNs) {
-        budget -= this.stepNs;
-        this.simTimeNs += this.stepNs;
-        this.stepStreaming(this.stepNs / 1e6);
+      if (this.pacing === "fixed") {
+        const behind = now - this.lastAdvanceNs;
+        if (behind >= this.stepNs) {
+          if (behind >= 2 * this.stepNs) {
+            this.overruns += 1;
+            this.lastAdvanceNs = now - this.stepNs;
+          }
+          this.lastAdvanceNs += this.stepNs;
+          this.simTimeNs += this.stepNs;
+          await this.stepStreaming(this.stepNs / 1e6);
+          // The step took time this call cannot see: frames and timers follow on the next call, stamped after it.
+          return this.drain();
+        }
+      } else {
+        let budget = now - this.lastAdvanceNs;
+        while (budget >= this.stepNs) {
+          budget -= this.stepNs;
+          this.simTimeNs += this.stepNs;
+          await this.stepStreaming(this.stepNs / 1e6);
+        }
+        this.lastAdvanceNs = now - budget;
       }
-      this.lastAdvanceNs = now - budget;
       for (const s of this.sessions.values()) this.serviceStreaming(s);
     }
     for (const s of [...this.sessions.values()]) this.serviceSession(s);
@@ -388,7 +461,7 @@ export class WorldHost<View = unknown> {
 
   // Operator surface (out of band, like awp-sim's signals)
 
-  engageEStop(now: number): HostOutput[] {
+  private onEStop(now: number): HostOutput[] {
     this.now = now;
     if (this.eStop) return this.drain();
     this.eStop = true;
@@ -405,20 +478,13 @@ export class WorldHost<View = unknown> {
     return this.drain();
   }
 
-  releaseEStop(now: number): HostOutput[] {
+  private onEStopRelease(now: number): HostOutput[] {
     this.now = now;
     if (!this.eStop) return this.drain();
     this.eStop = false;
     for (const s of this.sessions.values())
       for (const emb of s.embodiments) this.event(s, "e_stop_released", { embodiment: emb, source: "operator" });
     this.hooks.changed?.();
-    return this.drain();
-  }
-
-  /** `world.reset` on behalf of the operator (the UI), not a session. */
-  operatorReset(now: number, opts: { initialState?: string; seed?: number } = {}): HostOutput[] {
-    this.now = now;
-    this.resetWorld("operator", opts);
     return this.drain();
   }
 
@@ -439,6 +505,7 @@ export class WorldHost<View = unknown> {
       mode: this.mode,
       tick: this.tick,
       eStop: this.eStop,
+      overruns: this.overruns,
       seed: this.seed,
       initialState: this.initialState,
       sessions: [...this.sessions.values()].map((s) => ({
@@ -568,7 +635,7 @@ export class WorldHost<View = unknown> {
     return this.manifest;
   }
 
-  private rpcOpen(c: Conn, p: Json): undefined {
+  private async rpcOpen(c: Conn, p: Json): Promise<undefined> {
     const problems = validate("session-open", p, "receiver");
     if (problems.length > 0) throw new AwpFailure(JsonRpcCode.INVALID_PARAMS, "Invalid params", problems.join("; "));
     if (c.session && c.session.state !== "closed")
@@ -667,7 +734,7 @@ export class WorldHost<View = unknown> {
     }
     if (typeof p.seed === "number" && this.manifest.capabilities?.seed === true && !observer) {
       this.seed = p.seed;
-      this.sim = this.def.createSim({ seed: this.seed, initialState: this.initialState });
+      this.sim = await this.def.createSim({ seed: this.seed, initialState: this.initialState });
     }
     this.sessions.set(s.id, s);
     this.byToken.set(s.token, s);
@@ -974,23 +1041,24 @@ export class WorldHost<View = unknown> {
   // ---------------------------------------------------------------------------------------------
   // Lockstep
 
-  private rpcTick(s: Session, p: Json): Json {
+  private async rpcTick(s: Session, p: Json): Promise<Json> {
     if (s.observer) fail("AWP_TICK_NOT_AUTHORIZED", "observer sessions cannot advance the world");
     const expected = p.expected_tick as number;
     if (expected !== this.tick) fail("AWP_TICK_MISMATCH", `the world is at tick ${this.tick}`, { tick: this.tick });
     const count = (p.count as number | undefined) ?? 1;
-    for (let i = 0; i < count; i++) this.advanceTick();
+    // Every step of the advance completes, with its frames, before the result (AWP-TIM-003).
+    for (let i = 0; i < count; i++) await this.advanceTick();
     return { tick: this.tick };
   }
 
-  private advanceTick(): void {
+  private async advanceTick(): Promise<void> {
     this.tick += 1;
     this.advances += 1;
     const dt = this.tickNs / 1e6;
     const live = [...this.sessions.values()].filter((s) => s.state !== "closed");
     for (const s of live) this.startStaged(s);
     for (const s of live) this.updateRuns(s, dt, true);
-    this.sim.step(dt);
+    await this.sim.step(dt);
     for (const s of live) {
       this.promoteQueued(s);
       for (const g of s.grants.values()) if (!g.command) this.emitFrame(s, g, false);
@@ -1047,9 +1115,9 @@ export class WorldHost<View = unknown> {
     return undefined;
   }
 
-  private stepStreaming(dt: number): void {
+  private async stepStreaming(dt: number): Promise<void> {
     for (const s of this.sessions.values()) if (s.state !== "closed") this.updateRuns(s, dt, false);
-    this.sim.step(dt);
+    await this.sim.step(dt);
   }
 
   /** Streaming: promote queued, start accepted, as soon as a group frees. */
@@ -1368,18 +1436,21 @@ export class WorldHost<View = unknown> {
   // ---------------------------------------------------------------------------------------------
   // Reset
 
-  private rpcReset(s: Session, p: Json): Json {
+  private async rpcReset(s: Session, p: Json): Promise<Json> {
     if (!s.admin.includes("reset")) fail("AWP_FORBIDDEN", "reset is not granted");
     const initial = p.initial_state as string | undefined;
     if (initial !== undefined && !(this.manifest.initial_states ?? []).includes(initial))
       fail("AWP_PARAMS_INVALID", `no initial state ${initial}`);
     if (p.seed !== undefined && this.manifest.capabilities?.seed !== true)
       fail("AWP_PARAMS_INVALID", "this world takes no seed");
-    this.resetWorld(s.id, { initialState: initial, seed: p.seed as number | undefined });
+    await this.resetWorld(s.id, { initialState: initial, seed: p.seed as number | undefined });
     return this.mode === "lockstep" ? { tick: this.tick } : {};
   }
 
-  private resetWorld(initiator: string, opts: { initialState?: string | undefined; seed?: number | undefined }): void {
+  private async resetWorld(
+    initiator: string,
+    opts: { initialState?: string | undefined; seed?: number | undefined },
+  ): Promise<void> {
     const initial = opts.initialState ?? this.initialState;
     const live = [...this.sessions.values()].filter((s) => s.state !== "closed");
     for (const s of live) {
@@ -1388,7 +1459,7 @@ export class WorldHost<View = unknown> {
     }
     this.initialState = initial;
     if (opts.seed !== undefined) this.seed = opts.seed;
-    this.sim = this.def.createSim({ seed: this.seed, initialState: this.initialState });
+    this.sim = await this.def.createSim({ seed: this.seed, initialState: this.initialState });
     if (this.mode === "lockstep") {
       this.tick = 0;
       for (const s of live) for (const g of s.grants.values()) if (!g.command) this.emitFrame(s, g, false);
