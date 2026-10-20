@@ -176,6 +176,8 @@ interface Action {
   slot: number;
   /** `input_chunk`: the replacement that took over at a slot boundary, so nothing is released (AWP-GAM-003). */
   replacedBy?: string;
+  /** `input_chunk` in streaming: cancelled, it ends at the next slot boundary. */
+  abortAtBoundary?: boolean;
 }
 
 interface Session {
@@ -1449,6 +1451,12 @@ export class WorldHost<View = unknown> {
   }
 
   private startAbort(s: Session, a: Action, reason: string, deferInLockstep = false): void {
+    if (a.type === INPUT_CHUNK && this.mode === "streaming") {
+      // A cancelled chunk finishes its slot and releases at the next boundary, where a replacement would take over.
+      a.abortReason = reason;
+      a.abortAtBoundary = true;
+      return;
+    }
     const ms = a.run?.abort?.() ?? 0;
     if (this.mode === "lockstep" && deferInLockstep) {
       a.abortReason = reason;
@@ -1541,6 +1549,13 @@ export class WorldHost<View = unknown> {
     if (this.inputEmbodiments.length === 0) return;
     const running = new Map<string, Action>();
     for (const s of live) {
+      for (const a of this.liveActions(s)) {
+        if (a.abortAtBoundary && a.state === "cancelling")
+          this.finish(s, a, "cancelled", {
+            reason: a.abortReason ?? "cancelled_by_agent",
+            aborted_at_progress: round3(a.progress),
+          });
+      }
       const waiting = this.liveActions(s)
         .filter((a) => a.type === INPUT_CHUNK && a.state === "accepted")
         .sort((x, y) => x.order - y.order);
