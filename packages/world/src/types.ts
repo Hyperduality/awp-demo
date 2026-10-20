@@ -64,6 +64,11 @@ export interface Sim<View = unknown> {
   view(): View;
   /** Static render data sent once per inspector connection (e.g. the sorter cell geometry). */
   staticView?(): unknown;
+  /**
+   * Why the sim can no longer run (its engine process died, say), or undefined while it can. The host
+   * ends every session when it fails and makes a new sim for the next session or reset.
+   */
+  failed?(): string | undefined;
   /** Operator-level commands from the UI (not part of AWP), e.g. changing a spawn rate. */
   operator?(name: string, args: unknown): unknown;
 }

@@ -788,6 +788,8 @@ export class WorldHost<View = unknown> {
       const decl = cc ? this.manifest.command_channels?.find((x) => x.id === cc) : undefined;
       if (decl && !s.grants.has(decl.id)) this.grantChannel(s, c, decl, undefined, true);
     }
+    if (this.sim.failed?.() !== undefined)
+      this.useSim(await this.def.createSim({ seed: this.seed, initialState: this.initialState }));
     if (typeof p.seed === "number" && this.manifest.capabilities?.seed === true && !observer) {
       this.seed = p.seed;
       this.useSim(await this.def.createSim({ seed: this.seed, initialState: this.initialState }));
@@ -1105,7 +1107,10 @@ export class WorldHost<View = unknown> {
     if (expected !== this.tick) fail("AWP_TICK_MISMATCH", `the world is at tick ${this.tick}`, { tick: this.tick });
     const count = (p.count as number | undefined) ?? 1;
     // Every step of the advance completes, with its frames, before the result (AWP-TIM-003).
-    for (let i = 0; i < count; i++) await this.advanceTick();
+    for (let i = 0; i < count; i++) {
+      await this.advanceTick();
+      if (s.state === "closed") fail("AWP_SESSION_EXPIRED", "the world shut down");
+    }
     return { tick: this.tick };
   }
 
@@ -1118,6 +1123,7 @@ export class WorldHost<View = unknown> {
     this.applyInputs(live);
     for (const s of live) this.updateRuns(s, dt, true);
     await this.sim.step(dt);
+    this.checkSim();
     this.advanceInputs(live);
     for (const s of live) {
       this.promoteQueued(s);
@@ -1182,6 +1188,7 @@ export class WorldHost<View = unknown> {
     this.applyInputs(live);
     for (const s of live) this.updateRuns(s, dt, false);
     await this.sim.step(dt);
+    this.checkSim();
     this.advanceInputs(live);
   }
 
@@ -1582,6 +1589,27 @@ export class WorldHost<View = unknown> {
       ...(a && kind === "step" ? { slot: a.slot } : {}),
       state,
     });
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Sim failure
+
+  /** A failed sim ends every session: actions with `world_error`, sessions with `world_shutdown`. */
+  private checkSim(): void {
+    const failure = this.sim.failed?.();
+    if (failure === undefined) return;
+    for (const s of [...this.sessions.values()]) {
+      if (s.state === "closed") continue;
+      for (const emb of s.embodiments) this.sim.safeStop(emb);
+      for (const a of this.liveActions(s)) {
+        if (a.state === "executing" || a.state === "cancelling")
+          this.finish(s, a, "failed", { reason: "world_error", detail: failure });
+        else this.finish(s, a, "cancelled", { reason: "world_error" });
+      }
+      this.sessionState(s, "closed", "world_shutdown");
+      if (s.conn) this.out.push({ kind: "close", conn: s.conn.id, code: 1011, reason: "world_shutdown" });
+      this.dropSession(s);
+    }
   }
 
   // ---------------------------------------------------------------------------------------------

@@ -18,6 +18,8 @@ export function gridworld(
     stepMs?: number;
     pacing?: "catch-up" | "fixed";
     probe?: StepProbe;
+    /** The sim fails after this many steps, as an engine process dying would. */
+    failAfterSteps?: number;
     /** Add a binary `camera` channel whose payload is the avatar cell as two bytes, standing in for an image. */
     camera?: boolean;
   } = {},
@@ -107,10 +109,12 @@ export function gridworld(
     ...(opts.pacing ? { pacing: opts.pacing } : {}),
     createSim(): Sim<{ avatar: number[] }> {
       const avatar = [0, 0];
+      let steps = 0;
       const goal = [2, 0];
       const DIRS: Record<string, [number, number]> = { north: [0, 1], south: [0, -1], east: [1, 0], west: [-1, 0] };
       return {
         step() {
+          steps += 1;
           if (opts.asyncStepMs === undefined) return;
           const p = opts.probe;
           if (p) {
@@ -159,6 +163,8 @@ export function gridworld(
         },
         safeStop() {},
         view: () => ({ avatar: [...avatar] }),
+        failed: () =>
+          opts.failAfterSteps !== undefined && steps >= opts.failAfterSteps ? "the engine stopped" : undefined,
       };
     },
   };
