@@ -294,6 +294,35 @@ describe("binary observations", () => {
   });
 });
 
+describe("a failed sim", () => {
+  it("ends every session with world_shutdown and serves the next session a new sim", async () => {
+    world = await serveWorld(gridworld("lockstep", { failAfterSteps: 2 }), {
+      port: 0,
+      token: TOKEN,
+      log: (l) => problems.push(l),
+    });
+    const trace: { dir: string; m: { method?: string; params?: { state?: string; reason?: string } } }[] = [];
+    const c = client(world.url, trace as unknown[]);
+    await c.initialize();
+    await c.openSession("lockstep", { embodiment: "avatar_0", subscribe: ["grid_view"] });
+    const walk = await c.submit("walk_to", { cell: [5, 0] });
+    await c.advance(1);
+    // The world closes the connection after the closing statuses, so the advance never gets its result.
+    await expect(c.advance(1)).rejects.toThrow();
+    expect(walk.state).toBe("failed");
+    expect(walk.reason).toBe("world_error");
+    const closed = trace.find((t) => t.m.method === "session.state" && t.m.params?.state === "closed");
+    expect(closed?.m.params?.reason).toBe("world_shutdown");
+
+    const next = client(world.url);
+    await next.initialize();
+    await next.openSession("lockstep", { embodiment: "avatar_0", subscribe: ["grid_view"] });
+    await next.advance(1);
+    expect(jsonPayload<{ avatar: number[] }>(next.latest("grid_view")!.frame).avatar).toEqual([0, 0]);
+    await next.close();
+  });
+});
+
 describe("a world offering both time models", () => {
   async function both() {
     world = await serveWorld(gridworld("both"), { port: 0, token: TOKEN, log: (l) => problems.push(l) });
