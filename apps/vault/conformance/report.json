@@ -1,15 +1,15 @@
 {
   "suite": {
     "name": "awp-conformance",
-    "version": "0.1.0a7"
+    "version": "0.1.0a9"
   },
-  "specification": "0.1-draft.10",
+  "specification": "0.1-draft.11",
   "target": "ws://127.0.0.1:8713",
   "side": "world",
-  "generated": "2026-09-27T08:29:23Z",
+  "generated": "2026-10-20T01:48:20Z",
   "claim": {
     "status": "self-assessed",
-    "wording": "Core World (lockstep), self-assessed against 0.1-draft.10; awp-conformance 0.1.0a7 passes every assertion it ran",
+    "wording": "Core World (lockstep), self-assessed against 0.1-draft.11; awp-conformance 0.1.0a9 passes every assertion it ran",
     "classes": ["Core World"],
     "modes": ["lockstep"],
     "failed": [],
@@ -17,7 +17,7 @@
     "manual_evidence_required": ["AWP-DAT-008", "AWP-UNI-001", "AWP-VER-009"],
     "counts": {
       "manual": 3,
-      "n/a": 103,
+      "n/a": 107,
       "pass": 121,
       "untestable": 10,
       "untested": 4
@@ -286,7 +286,7 @@
       "id": "AWP-CLK-007",
       "level": "MUST",
       "outcome": "pass",
-      "detail": "22 check(s): lockstep/audit-log, lockstep/connection-loss, lockstep/connection-without-session, lockstep/determinism, lockstep/embodiment-binding, lockstep/grants, lockstep/half-open-replaced, lockstep/heartbeat, lockstep/isolation, lockstep/lifecycle-complete, lockstep/lockstep-clock, lockstep/queue, lockstep/reset, lockstep/resume-replay, lockstep/session-open, lockstep/staging, lockstep/subscriptions, lockstep/window-expiry"
+      "detail": "25 check(s): lockstep/audit-log, lockstep/close-during-motion, lockstep/connection-loss, lockstep/connection-without-session, lockstep/determinism, lockstep/embodiment-binding, lockstep/grants, lockstep/half-open-replaced, lockstep/heartbeat, lockstep/idempotency, lockstep/isolation, lockstep/lifecycle-complete, lockstep/lockstep-clock, lockstep/queue, lockstep/replace, lockstep/reset, lockstep/resume-replay, lockstep/session-open, lockstep/staging, lockstep/subscriptions, lockstep/window-expiry"
     },
     {
       "id": "AWP-CLK-008",
@@ -599,6 +599,30 @@
       "level": "MUST",
       "outcome": "pass",
       "detail": "1 check(s): lockstep/estop"
+    },
+    {
+      "id": "AWP-GAM-001",
+      "level": "MUST",
+      "outcome": "n/a",
+      "detail": "input_chunk declared: no"
+    },
+    {
+      "id": "AWP-GAM-002",
+      "level": "MUST",
+      "outcome": "n/a",
+      "detail": "input_chunk declared: no"
+    },
+    {
+      "id": "AWP-GAM-003",
+      "level": "MUST",
+      "outcome": "n/a",
+      "detail": "input_chunk declared: no"
+    },
+    {
+      "id": "AWP-GAM-004",
+      "level": "MUST",
+      "outcome": "n/a",
+      "detail": "input_chunk declared: no"
     },
     {
       "id": "AWP-GUI-001",
@@ -994,7 +1018,7 @@
       "id": "AWP-SAF-001",
       "level": "MUST",
       "outcome": "pass",
-      "detail": "20 check(s): lockstep/audit-log, lockstep/connection-loss, lockstep/determinism, lockstep/embodiment-binding, lockstep/grants, lockstep/half-open-replaced, lockstep/heartbeat, lockstep/isolation, lockstep/lifecycle-complete, lockstep/lockstep-clock, lockstep/queue, lockstep/reset, lockstep/resume-replay, lockstep/session-open, lockstep/staging, lockstep/subscriptions, lockstep/window-expiry"
+      "detail": "23 check(s): lockstep/audit-log, lockstep/close-during-motion, lockstep/connection-loss, lockstep/determinism, lockstep/embodiment-binding, lockstep/grants, lockstep/half-open-replaced, lockstep/heartbeat, lockstep/idempotency, lockstep/isolation, lockstep/lifecycle-complete, lockstep/lockstep-clock, lockstep/queue, lockstep/replace, lockstep/reset, lockstep/resume-replay, lockstep/session-open, lockstep/staging, lockstep/subscriptions, lockstep/window-expiry"
     },
     {
       "id": "AWP-SAF-002",
@@ -1624,6 +1648,10 @@
     {
       "test": "lockstep/snapshot-restore",
       "outcome": "skipped: capability snapshot not advertised"
+    },
+    {
+      "test": "lockstep/input-chunk",
+      "outcome": "skipped: input_chunk not declared"
     },
     {
       "test": "lockstep/staging",

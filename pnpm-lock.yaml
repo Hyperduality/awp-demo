@@ -39,8 +39,8 @@ importers:
         specifier: ^3.2.6
         version: 3.2.6(@internationalized/date@3.12.4)(@react-aria/ssr@3.10.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(@react-aria/utils@3.34.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(@react-spectrum/provider@3.11.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-aria-components@1.21.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react-aria@3.52.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(tailwind-merge@3.7.0)(tailwindcss@4.3.3)
       '@hyperduality/awp':
-        specifier: 0.1.0-alpha.4
-        version: 0.1.0-alpha.4
+        specifier: 0.1.0-alpha.5
+        version: 0.1.0-alpha.5
       ai:
         specifier: ^7.0.118
         version: 7.0.118(zod@4.6.5)
@@ -112,8 +112,8 @@ importers:
         specifier: ^3.2.6
         version: 3.2.6(@internationalized/date@3.12.4)(@react-aria/ssr@3.10.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(@react-aria/utils@3.34.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(@react-spectrum/provider@3.11.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-aria-components@1.21.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react-aria@3.52.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(tailwind-merge@3.7.0)(tailwindcss@4.3.3)
       '@hyperduality/awp':
-        specifier: 0.1.0-alpha.4
-        version: 0.1.0-alpha.4
+        specifier: 0.1.0-alpha.5
+        version: 0.1.0-alpha.5
       ai:
         specifier: ^7.0.118
         version: 7.0.118(zod@4.6.5)
@@ -182,8 +182,8 @@ importers:
         specifier: ^3.2.6
         version: 3.2.6(@internationalized/date@3.12.4)(@react-aria/ssr@3.10.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(@react-aria/utils@3.34.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(@react-spectrum/provider@3.11.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-aria-components@1.21.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react-aria@3.52.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(tailwind-merge@3.7.0)(tailwindcss@4.3.3)
       '@hyperduality/awp':
-        specifier: 0.1.0-alpha.4
-        version: 0.1.0-alpha.4
+        specifier: 0.1.0-alpha.5
+        version: 0.1.0-alpha.5
       ai:
         specifier: ^7.0.118
         version: 7.0.118(zod@4.6.5)
@@ -252,8 +252,8 @@ importers:
         specifier: workspace:*
         version: link:../inspector
       '@hyperduality/awp':
-        specifier: 0.1.0-alpha.4
-        version: 0.1.0-alpha.4
+        specifier: 0.1.0-alpha.5
+        version: 0.1.0-alpha.5
       ai:
         specifier: ^7.0.118
         version: 7.0.118(zod@4.6.5)
@@ -362,8 +362,8 @@ importers:
         specifier: workspace:*
         version: link:../tsconfig
       '@hyperduality/awp':
-        specifier: 0.1.0-alpha.4
-        version: 0.1.0-alpha.4
+        specifier: 0.1.0-alpha.5
+        version: 0.1.0-alpha.5
       '@types/react':
         specifier: ^19.2.0
         version: 19.3.0
@@ -392,8 +392,8 @@ importers:
         specifier: workspace:*
         version: link:../inspector
       '@hyperduality/awp':
-        specifier: 0.1.0-alpha.4
-        version: 0.1.0-alpha.4
+        specifier: 0.1.0-alpha.5
+        version: 0.1.0-alpha.5
       ws:
         specifier: ^8.22.0
         version: 8.22.0
@@ -725,8 +725,8 @@ packages:
     peerDependencies:
       tailwindcss: '>=4.0.0'
 
-  '@hyperduality/awp@0.1.0-alpha.4':
-    resolution: {integrity: sha512-1HYGgWL+WF9b1/DJdPubDKR/Xo7SXWGo1qYdJ8DZDYD+PKwZaruwkD8gSX6om4A4dIEML9/1p2r+/+SC6IzdLw==}
+  '@hyperduality/awp@0.1.0-alpha.5':
+    resolution: {integrity: sha512-JTiE1aOhmHturLLe8wo+HEmQjUe5Gwe7MTaS47dHcfBFw9PB7rP1xq/X0eyLh/quab00bj2lgJJ0KjH4vxQf5Q==}
     engines: {node: '>=20'}
     hasBin: true
 
@@ -2274,7 +2274,7 @@ snapshots:
     transitivePeerDependencies:
       - tailwind-merge
 
-  '@hyperduality/awp@0.1.0-alpha.4':
+  '@hyperduality/awp@0.1.0-alpha.5':
     dependencies:
       ajv: 8.20.0
       ajv-formats: 3.0.1(ajv@8.20.0)

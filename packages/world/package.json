@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@awp-demo/inspector": "workspace:*",
-    "@hyperduality/awp": "0.1.0-alpha.4",
+    "@hyperduality/awp": "0.1.0-alpha.5",
     "ws": "^8.22.0"
   },
   "devDependencies": {
