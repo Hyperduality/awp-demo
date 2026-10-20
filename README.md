@@ -11,8 +11,9 @@ Runnable demos of the [Agent World Protocol](https://www.agentworldprotocol.com)
 | **Sorter** | lockstep | program | A two-link arm and a gripper bound together (multi-bind), queue and replace preemption, a program that intercepts parcels on a conveyor |
 | **Vault** | lockstep | LLM | A language model exploring a dark vault through world actions, with the world held still while it thinks |
 | **Dispatch** | streaming | LLM | A language model running a city's emergency dispatch while the city keeps moving: actions that return on admission, decisions refused once the view behind them is too old (stale intent), and a watchdog held off only while the model is producing |
+| **Minecraft** | both | manual | Minecraft through device input (`input_chunk`: keys and mouse in 50 ms slots), switchable between lockstep and streaming. You, OpenAI's VPT, a vision model and a script take turns; VPT's decisions are refused once they arrive more than 150 ms after their frame. Needs a GPU and Linux or WSL2; see [its README](apps/minecraft/README.md) |
 
-Every demo has all three kinds of controller. Only one holds control at a time: the highest-priority controller that wants it. Manual outranks LLM, which outranks program. When control changes hands, the agent cancels what the previous holder was doing; in Dispatch the new holder inherits the units already on their way instead. The world therefore sees one coherent session, and the UI shows one continuous stream of events.
+Every demo has all three kinds of controller; Minecraft adds a fourth, a learned policy. Only one holds control at a time: the highest-priority controller that wants it. Manual outranks LLM, which outranks policy, which outranks program. When control changes hands, the agent cancels what the previous holder was doing; in Dispatch the new holder inherits the units already on their way instead. The world therefore sees one coherent session, and the UI shows one continuous stream of events.
 
 ## Running
 
@@ -23,6 +24,7 @@ pnpm install
 pnpm sorter    # world :8712, UI http://localhost:5172
 pnpm vault     # world :8713, UI http://localhost:5173
 pnpm dispatch  # world :8714, UI http://localhost:5174
+pnpm minecraft # world :8715, UI http://localhost:5175 (setup in apps/minecraft/README.md)
 ```
 
 `pnpm dev` runs every demo at once. Copy `.env.example` to `.env` to change the bearer token or to give the LLM controllers keys from the environment. A key entered in the UI is held in the agent process's memory only.
@@ -60,7 +62,7 @@ An LLM controller for a world that waits takes one turn per message (`createLlmC
 
 ## Conformance
 
-Each world passes every assertion of awp-conformance 0.1.0a9 (0.1-draft.11) for Core World in its time model. The claim is "self-assessed against 0.1-draft.11": the suite leaves a few requirements untested, as listed in each report. Reports and fixtures are in `apps/<demo>/conformance/`.
+Sorter, Vault and Dispatch each pass every assertion of awp-conformance 0.1.0a9 (0.1-draft.11) for Core World in its time model. The claim is "self-assessed against 0.1-draft.11": the suite leaves a few requirements untested, as listed in each report. Reports and fixtures are in `apps/<demo>/conformance/`. Minecraft makes no claim yet: it targets Core World and the game profile in both time models under 0.1-draft.12, which no release of the suite covers yet. In CI it runs on its fake engine; its fixture and its device-input evidence are in `apps/minecraft/conformance/`.
 
 ```bash
 pnpm --filter sorter world                       # in one shell

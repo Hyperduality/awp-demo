@@ -1,0 +1,12 @@
+# The Python side of the Minecraft demo: the sim sidecar and the VPT policy server share one environment.
+[tool.uv.workspace]
+members = ["sim", "policy"]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu124" }
+torchvision = { index = "pytorch-cu124" }
+
+[[tool.uv.index]]
+name = "pytorch-cu124"
+url = "https://download.pytorch.org/whl/cu124"
+explicit = true

@@ -203,3 +203,34 @@ export function fixedSlotMs(manifest: WorldManifest): number | undefined {
   const v = schema.properties?.slot_ms?.const;
   return isInt(v) ? v : undefined;
 }
+
+export type DeviceField = "mouse_dx" | "mouse_dy" | "scroll_steps" | "sticks" | "triggers";
+
+/**
+ * The normative `input_chunk` params schema narrowed the ways AWP-GAM-001 allows: `slot_ms` fixed,
+ * fewer slots, a subset of key names, and the device fields an embodiment lacks removed. The key-name
+ * enum goes in the manifest's `$defs` under `keysDef`, which the params schema's `$ref` resolves against.
+ */
+export function narrowInputChunk(opts: {
+  slotMs: number;
+  maxSlots: number;
+  keys: string[];
+  without?: DeviceField[];
+  keysDef?: string;
+}): { params_schema: Record<string, unknown>; $defs: Record<string, unknown> } {
+  const keysDef = opts.keysDef ?? "input_key_name";
+  const schema = structuredClone(readVendored("v0.1/profiles/input-chunk.schema.json")) as {
+    $defs?: unknown;
+    properties: {
+      slot_ms: Node;
+      slots: { maxItems: number; items: { properties: Record<string, Node> } };
+    };
+  };
+  delete schema.$defs;
+  schema.properties.slot_ms.const = opts.slotMs;
+  schema.properties.slots.maxItems = opts.maxSlots;
+  const slot = schema.properties.slots.items.properties;
+  for (const f of opts.without ?? []) delete slot[f];
+  slot.keys!.items = { $ref: `#/$defs/${keysDef}` };
+  return { params_schema: schema as unknown as Record<string, unknown>, $defs: { [keysDef]: { enum: opts.keys } } };
+}
