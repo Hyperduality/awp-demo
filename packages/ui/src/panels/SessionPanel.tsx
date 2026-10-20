@@ -1,8 +1,16 @@
-import { type AgentStatus, AgentTopic, type WorldSessionView, type WorldState, WorldTopic } from "@awp-demo/inspector";
+import {
+  AgentCommand,
+  type AgentStatus,
+  AgentTopic,
+  type WorldSessionView,
+  type WorldState,
+  WorldTopic,
+} from "@awp-demo/inspector";
 import { useTopic } from "@awp-demo/inspector/react";
 import { useDemo } from "../context.tsx";
 import { nsToSeconds, stateLabel, stateTone, TONE_CLASS } from "../format.ts";
 import { KeyValue, SectionLabel } from "../primitives/KeyValue.tsx";
+import { Segmented } from "../primitives/Segmented.tsx";
 
 const LIFECYCLE = ["ready", "active", "suspended", "closed"] as const;
 
@@ -41,7 +49,23 @@ export function SessionPanel() {
               {s.id}
             </span>,
           ],
-          ["Mode", stateLabel(s.mode)],
+          [
+            "Mode",
+            (status?.timeModels?.length ?? 0) > 1 ? (
+              <Segmented
+                key="mode"
+                label="Time model"
+                value={s.mode as "lockstep" | "streaming"}
+                onChange={(mode) => agent.command(AgentCommand.mode, { mode })}
+                options={[
+                  { id: "lockstep", label: "Lockstep" },
+                  { id: "streaming", label: "Streaming" },
+                ]}
+              />
+            ) : (
+              stateLabel(s.mode)
+            ),
+          ],
           ["Clock", nsToSeconds(s.clockNs)],
           ...(s.mode === "lockstep"
             ? ([["Tick", state?.tick.toLocaleString()]] as [string, string | undefined][])
