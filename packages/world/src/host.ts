@@ -185,12 +185,14 @@ interface Session {
 
 export class WorldHost<View = unknown> {
   readonly manifest: WorldManifest;
-  readonly mode: TimeModel;
+  /** The time model sessions run in now. A world offering both switches only while no session is bound. */
+  mode: TimeModel;
   sim: Sim<View>;
   tick = 0;
   eStop = false;
 
   private readonly def: WorldDefinition<View>;
+  private readonly modes: TimeModel[];
   private readonly hooks: HostHooks;
   private readonly validateOut: boolean;
   private readonly tickNs: number;
@@ -225,9 +227,10 @@ export class WorldHost<View = unknown> {
     this.validateOut = options.validateOutgoing ?? true;
     const problems = validate("world-manifest", def.manifest, "sender");
     if (problems.length > 0) throw new Error(`world manifest is invalid: ${problems.join("; ")}`);
-    const [mode] = def.manifest.time_models;
-    if (!mode || def.manifest.time_models.length !== 1) throw new Error("a world host serves exactly one time model");
-    this.mode = mode;
+    this.modes = [...def.manifest.time_models];
+    if (this.modes.length === 0 || new Set(this.modes).size !== this.modes.length)
+      throw new Error("time_models must list each time model once");
+    this.mode = this.modes[0]!;
     this.tickNs = Math.round((def.tickMs ?? 50) * 1e6);
     this.stepNs = Math.round((def.stepMs ?? 1000 / 60) * 1e6);
     this.heartbeatMs = def.heartbeatIntervalMs ?? 5000;
@@ -571,7 +574,10 @@ export class WorldHost<View = unknown> {
     if (c.session && c.session.state !== "closed")
       fail("AWP_SESSION_EXISTS", "this connection already holds a session");
     const mode = p.mode as TimeModel;
-    if (mode !== this.mode) fail("AWP_TIME_MODEL_UNSUPPORTED", `this world runs ${this.mode}`);
+    if (!this.modes.includes(mode)) fail("AWP_TIME_MODEL_UNSUPPORTED", `this world offers ${this.modes.join(" and ")}`);
+    // A session runs in exactly one time model, and the world in one at a time (AWP-TIM-001).
+    if (mode !== this.mode && [...this.sessions.values()].some((x) => x.state !== "closed"))
+      fail("AWP_TIME_MODEL_UNSUPPORTED", `this world is running ${this.mode} for another session`);
     if (p.takeover) fail("AWP_EMBODIMENT_UNAVAILABLE", "transfer is not supported");
     const requested = p.embodiments ? (p.embodiments as string[]) : p.embodiment ? [p.embodiment as string] : [];
     const multi = Array.isArray(p.embodiments);
@@ -604,6 +610,10 @@ export class WorldHost<View = unknown> {
       if (this.manifest.capabilities?.task !== true)
         throw new AwpFailure(JsonRpcCode.INVALID_PARAMS, "Invalid params", "this world has no task capability");
       this.checkTask(p.task);
+    }
+    if (mode !== this.mode) {
+      this.mode = mode;
+      this.lastAdvanceNs = undefined;
     }
     const observer = decls.length === 0;
     const offeredTypes = new Set(decls.flatMap((d) => d.action_types));

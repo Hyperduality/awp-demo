@@ -208,7 +208,9 @@ export async function serveWorld<View>(def: WorldDefinition<View>, opts: ServeOp
     process.on("SIGUSR2", onUsr2);
   }
 
-  log(`${def.manifest.world.name} (${host.mode}) on ${url}${inspector ? `, inspector on :${inspector.port}` : ""}`);
+  log(
+    `${def.manifest.world.name} (${def.manifest.time_models.join(", ")}) on ${url}${inspector ? `, inspector on :${inspector.port}` : ""}`,
+  );
 
   return {
     host,

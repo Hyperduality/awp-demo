@@ -1,16 +1,18 @@
 import type { WorldManifest } from "@hyperduality/awp";
 import type { ActionRun, Sim, WorldDefinition } from "../src/types.ts";
 
-/** The spec's example gridworld (examples/v0.1/traces/core-lockstep.jsonl), in either time model. */
+/** The spec's example gridworld (examples/v0.1/traces/core-lockstep.jsonl), in either time model or both. */
 export function gridworld(
-  mode: "lockstep" | "streaming",
+  mode: "lockstep" | "streaming" | "both",
   opts: { maxBasisAgeMs?: number } = {},
 ): WorldDefinition<{ avatar: number[] }> {
+  const lockstep = mode !== "streaming";
+  const streaming = mode !== "lockstep";
   const manifest: WorldManifest = {
     protocol_version: "0.1",
     world: { name: "gridworld", version: "0.1.0", vendor: "awp-demo" },
-    time_models: [mode],
-    ...(mode === "lockstep" ? { tick_policy: "on_tick" as const, tick_authority: "any_session" as const } : {}),
+    time_models: mode === "both" ? ["lockstep", "streaming"] : [mode],
+    ...(lockstep ? { tick_policy: "on_tick" as const, tick_authority: "any_session" as const } : {}),
     capabilities: { seed: true, task: true },
     initial_states: ["default"],
     embodiments: [{ id: "avatar_0", kind: "avatar", action_types: ["move", "walk_to"], channels: ["grid_view"] }],
@@ -18,7 +20,7 @@ export function gridworld(
       {
         id: "grid_view",
         modality: "text/event+json",
-        rate_hz: mode === "lockstep" ? null : 20,
+        rate_hz: streaming ? 20 : null,
         loss_class: "reliable",
         schema: {
           type: "object",
@@ -59,13 +61,14 @@ export function gridworld(
     ],
     safety_policy: {
       envelopes: [],
-      ...(mode === "streaming" ? { safe_state: { behavior: "safe_stop", watchdog_ms: 1000 } } : {}),
+      ...(streaming ? { safe_state: { behavior: "safe_stop", watchdog_ms: 1000 } } : {}),
       ...(opts.maxBasisAgeMs !== undefined ? { max_basis_age_ms: opts.maxBasisAgeMs } : {}),
     },
   };
   return {
     manifest,
-    tickMs: 1,
+    // Both models walk at one cell per 50 ms, so one advance moves one cell either way.
+    tickMs: mode === "both" ? 50 : 1,
     createSim(): Sim<{ avatar: number[] }> {
       const avatar = [0, 0];
       const goal = [2, 0];
