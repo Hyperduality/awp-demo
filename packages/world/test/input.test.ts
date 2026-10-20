@@ -178,6 +178,16 @@ describe("input_chunk in streaming", () => {
     await c.close();
   });
 
+  it("ends a cancelled chunk at the next slot boundary, where a close outranks the cancel (AWP-LIF-008)", async () => {
+    const w = await start(keyboard("streaming"));
+    const c = await open(w, "streaming");
+    const rec = await c.submit("input_chunk", chunk(hold(["KeyW"], 20)));
+    await until(() => rec.state === "executing");
+    await Promise.all([c.cancel(rec.action_id), c.close()]);
+    expect(rec.state).toBe("cancelled");
+    expect(rec.reason).toBe("session_closed");
+  });
+
   it("releases on cancel, on safe-state entry and on e-stop (AWP-GAM-004)", async () => {
     const applied: Applied[] = [];
     const w = await start(keyboard("streaming", { applied, watchdogMs: 300 }));
