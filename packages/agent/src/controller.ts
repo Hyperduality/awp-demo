@@ -3,7 +3,7 @@ import type { ActionRecord, ReceivedFrame, TimeModel, WorldManifest } from "@hyp
 import type { z } from "zod";
 
 /**
- * A way of driving the world: a person at the keyboard, a program, a language model. Several can be
+ * A way of driving the world: a person at the keyboard, a program, a language model, a learned policy. Several can be
  * enabled on the one session; the mux gives authority to one at a time.
  */
 export interface Controller<C = unknown> {
@@ -12,7 +12,7 @@ export interface Controller<C = unknown> {
   label: string;
   /** One sentence for the UI. */
   description: string;
-  /** Higher wins while engaged. Defaults: manual 30, llm 20, program 10. */
+  /** Higher wins while engaged. Defaults: manual 30, llm 20, policy 15, program 10. */
   priority?: number;
   /**
    * Lockstep only: whether time flows while this controller holds authority (`continuous`), or only
@@ -147,4 +147,4 @@ export class NotInControlError extends Error {
   }
 }
 
-export const DEFAULT_PRIORITY: Record<ControllerKind, number> = { manual: 30, llm: 20, program: 10 };
+export const DEFAULT_PRIORITY: Record<ControllerKind, number> = { manual: 30, llm: 20, policy: 15, program: 10 };

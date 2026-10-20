@@ -1,3 +1,4 @@
+import type { ControllerKind } from "@awp-demo/inspector";
 import type { InspectorClient } from "@awp-demo/inspector/client";
 import { createContext, type ReactNode, useContext, useMemo, useState } from "react";
 
@@ -7,7 +8,7 @@ export interface DemoInfo {
   /** One or two sentences: what this demo shows. */
   summary: string;
   /** The controller the demo leads with. */
-  lead: "manual" | "program" | "llm";
+  lead: ControllerKind;
   /** Plain-language notes on what to try. */
   tryThis?: string[];
 }

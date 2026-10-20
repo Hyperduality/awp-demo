@@ -81,7 +81,7 @@ export function keyboard(
       ...(streaming ? { safe_state: { behavior: "safe_stop", watchdog_ms: opts.watchdogMs ?? 2000 } } : {}),
     },
     $defs: schema.defs,
-  } as WorldManifest;
+  } as unknown as WorldManifest;
   return {
     manifest,
     tickMs: 50,

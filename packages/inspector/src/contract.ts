@@ -130,7 +130,7 @@ export const AgentCommand = {
   reconnect: "agent.reconnect",
 } as const;
 
-export type ControllerKind = "manual" | "program" | "llm";
+export type ControllerKind = "manual" | "program" | "llm" | "policy";
 
 export interface ControllerState {
   id: string;
