@@ -20,6 +20,8 @@ export function gridworld(
     probe?: StepProbe;
     /** The sim fails after this many steps, as an engine process dying would. */
     failAfterSteps?: number;
+    /** Making a sim (start, reset) takes this long, as a game engine resetting would. */
+    slowCreateMs?: number;
     /** Add a binary `camera` channel whose payload is the avatar cell as two bytes, standing in for an image. */
     camera?: boolean;
   } = {},
@@ -107,65 +109,71 @@ export function gridworld(
     tickMs: mode === "both" ? 50 : 1,
     ...(opts.stepMs !== undefined ? { stepMs: opts.stepMs } : {}),
     ...(opts.pacing ? { pacing: opts.pacing } : {}),
-    createSim(): Sim<{ avatar: number[] }> {
-      const avatar = [0, 0];
-      let steps = 0;
-      const goal = [2, 0];
-      const DIRS: Record<string, [number, number]> = { north: [0, 1], south: [0, -1], east: [1, 0], west: [-1, 0] };
-      return {
-        step() {
-          steps += 1;
-          if (opts.asyncStepMs === undefined) return;
-          const p = opts.probe;
-          if (p) {
-            p.steps += 1;
-            p.inFlight += 1;
-            p.maxInFlight = Math.max(p.maxInFlight, p.inFlight);
-          }
-          return new Promise<void>((resolve) =>
-            setTimeout(() => {
-              if (p) p.inFlight -= 1;
-              resolve();
-            }, opts.asyncStepMs),
-          );
-        },
-        observe: (channel) =>
-          channel === "camera" ? { bytes: Uint8Array.from(avatar) } : { avatar: [...avatar], goal },
-        start(_e, type, params): ActionRun {
-          if (type === "move") {
-            const [dx, dy] = DIRS[params.direction as string]!;
-            return {
-              update() {
-                avatar[0]! += dx;
-                avatar[1]! += dy;
-                return { done: true };
-              },
-            };
-          }
-          const target = params.cell as number[];
-          const start = [...avatar];
-          const total = Math.max(1, Math.abs(target[0]! - start[0]!) + Math.abs(target[1]! - start[1]!));
-          let acc = 0;
-          return {
-            update(dt) {
-              acc += mode === "lockstep" ? 1 : dt / 50;
-              while (acc >= 1) {
-                acc -= 1;
-                if (avatar[0] !== target[0]) avatar[0]! += Math.sign(target[0]! - avatar[0]!);
-                else if (avatar[1] !== target[1]) avatar[1]! += Math.sign(target[1]! - avatar[1]!);
-              }
-              const left = Math.abs(target[0]! - avatar[0]!) + Math.abs(target[1]! - avatar[1]!);
-              return left === 0 ? { done: true } : { progress: 1 - left / total };
-            },
-            // Braking takes time while streaming, so aborts can be overtaken (AWP-LIF-008).
-            abort: () => (mode === "streaming" ? 400 : 0),
-          };
-        },
-        safeStop() {},
-        view: () => ({ avatar: [...avatar] }),
-        failed: () =>
-          opts.failAfterSteps !== undefined && steps >= opts.failAfterSteps ? "the engine stopped" : undefined,
-      };
+    createSim() {
+      const sim = makeSim();
+      return opts.slowCreateMs === undefined
+        ? sim
+        : new Promise<Sim<{ avatar: number[] }>>((r) => setTimeout(() => r(sim), opts.slowCreateMs));
     },
   };
+
+  function makeSim(): Sim<{ avatar: number[] }> {
+    const avatar = [0, 0];
+    let steps = 0;
+    const goal = [2, 0];
+    const DIRS: Record<string, [number, number]> = { north: [0, 1], south: [0, -1], east: [1, 0], west: [-1, 0] };
+    return {
+      step() {
+        steps += 1;
+        if (opts.asyncStepMs === undefined) return;
+        const p = opts.probe;
+        if (p) {
+          p.steps += 1;
+          p.inFlight += 1;
+          p.maxInFlight = Math.max(p.maxInFlight, p.inFlight);
+        }
+        return new Promise<void>((resolve) =>
+          setTimeout(() => {
+            if (p) p.inFlight -= 1;
+            resolve();
+          }, opts.asyncStepMs),
+        );
+      },
+      observe: (channel) => (channel === "camera" ? { bytes: Uint8Array.from(avatar) } : { avatar: [...avatar], goal }),
+      start(_e, type, params): ActionRun {
+        if (type === "move") {
+          const [dx, dy] = DIRS[params.direction as string]!;
+          return {
+            update() {
+              avatar[0]! += dx;
+              avatar[1]! += dy;
+              return { done: true };
+            },
+          };
+        }
+        const target = params.cell as number[];
+        const start = [...avatar];
+        const total = Math.max(1, Math.abs(target[0]! - start[0]!) + Math.abs(target[1]! - start[1]!));
+        let acc = 0;
+        return {
+          update(dt) {
+            acc += mode === "lockstep" ? 1 : dt / 50;
+            while (acc >= 1) {
+              acc -= 1;
+              if (avatar[0] !== target[0]) avatar[0]! += Math.sign(target[0]! - avatar[0]!);
+              else if (avatar[1] !== target[1]) avatar[1]! += Math.sign(target[1]! - avatar[1]!);
+            }
+            const left = Math.abs(target[0]! - avatar[0]!) + Math.abs(target[1]! - avatar[1]!);
+            return left === 0 ? { done: true } : { progress: 1 - left / total };
+          },
+          // Braking takes time while streaming, so aborts can be overtaken (AWP-LIF-008).
+          abort: () => (mode === "streaming" ? 400 : 0),
+        };
+      },
+      safeStop() {},
+      view: () => ({ avatar: [...avatar] }),
+      failed: () =>
+        opts.failAfterSteps !== undefined && steps >= opts.failAfterSteps ? "the engine stopped" : undefined,
+    };
+  }
 }

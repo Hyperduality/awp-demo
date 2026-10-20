@@ -44,6 +44,8 @@ export type HostOutput =
 /** Frames carry enough to be restamped (`ts_send_ns`) and replaced (latest-wins) by the transport. */
 export interface FrameMeta {
   session: string;
+  /** The session clock's origin, so a frame is stamped even if its session closes before it is written. */
+  originNs: number;
   key: string;
   latestWins: boolean;
   streaming: boolean;
@@ -337,7 +339,40 @@ export class WorldHost<View = unknown> {
   }
 
   receiveText(conn: number, text: string, now: number): Promise<HostOutput[]> {
-    return this.serial(() => this.onText(conn, text, now));
+    const pong = this.pingNow(conn, text, now);
+    return pong ? Promise.resolve(pong) : this.serial(() => this.onText(conn, text, now));
+  }
+
+  /**
+   * A ping is answered at once, even while a slow step or reset holds the queue, so the agent's
+   * heartbeat sees a live world (AWP-SAF-001). It touches nothing a queued request relies on.
+   */
+  private pingNow(conn: number, text: string, now: number): HostOutput[] | undefined {
+    if (!text.includes('"ping"')) return undefined;
+    let m: Json;
+    try {
+      const parsed = parseJsonChecked(text);
+      // An integer out of range is a protocol error the queued path answers (AWP-CTL-009).
+      if (parsed.outOfRange.length > 0) return undefined;
+      m = parsed.value as Json;
+    } catch {
+      return undefined;
+    }
+    const c = this.conns.get(conn);
+    if (!c || m?.jsonrpc !== "2.0" || m.method !== "ping" || !Object.hasOwn(m, "id")) return undefined;
+    const params = m.params ?? {};
+    if (typeof params !== "object" || Array.isArray(params)) return undefined;
+    this.now = Math.max(this.now, now);
+    c.lastRecvNs = now;
+    const s = c.session;
+    if (s && s.conn === c) s.lastAgentNs = now;
+    const held = this.out;
+    this.out = [];
+    if (s) this.audit(s, "in", "control", m);
+    this.result(c, m.id as Id, "ping", this.rpcPing(c, params as Json));
+    const out = this.out;
+    this.out = held;
+    return out;
   }
 
   /** Timers: streaming physics and frames, deadlines, watchdogs, heartbeats, retention. */
@@ -505,11 +540,12 @@ export class WorldHost<View = unknown> {
 
   /** Stamps `ts_send_ns` on a streaming frame the transport is about to write (AWP-OBS-006). */
   stampSend(meta: FrameMeta, message: Json, now: number): Json {
-    const s = this.sessions.get(meta.session);
-    if (!s || !meta.streaming) return message;
+    if (!meta.streaming) return message;
     const params = message.params as Json;
-    const send = Math.max(now - s.originNs, params.ts_mono_ns as number);
+    const send = Math.max(now - meta.originNs, params.ts_mono_ns as number);
     params.ts_send_ns = send;
+    const s = this.sessions.get(meta.session);
+    if (!s) return message;
     s.telemetry.obs.push(send - (params.ts_mono_ns as number));
     const per = s.telemetry.perChannel.get(params.channel_id as number) ?? [];
     per.push(send - (params.ts_mono_ns as number));
@@ -1854,6 +1890,7 @@ export class WorldHost<View = unknown> {
       message,
       frame: {
         session: s.id,
+        originNs: s.originNs,
         key: `${s.id}:${g.channelId}`,
         latestWins: streaming && g.decl.loss_class === "latest-wins",
         streaming,

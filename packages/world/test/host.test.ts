@@ -323,6 +323,26 @@ describe("a failed sim", () => {
   });
 });
 
+describe("liveness during slow sim work", () => {
+  it("answers a ping while a slow reset holds the queue (AWP-SAF-001)", async () => {
+    world = await serveWorld(gridworld("lockstep", { slowCreateMs: 400 }), {
+      port: 0,
+      token: TOKEN,
+      log: (l) => problems.push(l),
+    });
+    const c = client(world.url);
+    await c.initialize();
+    await c.openSession("lockstep", { embodiment: "avatar_0", subscribe: ["grid_view"], admin: ["reset"] });
+    const reset = c.reset();
+    await new Promise((r) => setTimeout(r, 50));
+    const t0 = Date.now();
+    await c.heartbeat();
+    expect(Date.now() - t0).toBeLessThan(200);
+    expect(await reset).toBe(0);
+    await c.close();
+  });
+});
+
 describe("a world offering both time models", () => {
   async function both() {
     world = await serveWorld(gridworld("both"), { port: 0, token: TOKEN, log: (l) => problems.push(l) });
