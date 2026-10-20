@@ -1,15 +1,15 @@
 {
   "suite": {
     "name": "awp-conformance",
-    "version": "0.1.0a7"
+    "version": "0.1.0a9"
   },
-  "specification": "0.1-draft.10",
+  "specification": "0.1-draft.11",
   "target": "ws://127.0.0.1:8714",
   "side": "world",
-  "generated": "2026-10-16T22:31:38Z",
+  "generated": "2026-10-20T01:51:15Z",
   "claim": {
     "status": "self-assessed",
-    "wording": "Core World (streaming), self-assessed against 0.1-draft.10; awp-conformance 0.1.0a7 passes every assertion it ran",
+    "wording": "Core World (streaming), self-assessed against 0.1-draft.11; awp-conformance 0.1.0a9 passes every assertion it ran",
     "classes": ["Core World"],
     "modes": ["streaming"],
     "failed": [],
@@ -17,7 +17,7 @@
     "manual_evidence_required": ["AWP-DAT-002", "AWP-DAT-008", "AWP-TRN-009", "AWP-UNI-001", "AWP-VER-009"],
     "counts": {
       "manual": 5,
-      "n/a": 94,
+      "n/a": 98,
       "pass": 127,
       "untestable": 10,
       "untested": 5
@@ -88,7 +88,7 @@
       "id": "AWP-AGM-001",
       "level": "MUST",
       "outcome": "pass",
-      "detail": "39 check(s): streaming/admission-refusals, streaming/audit-log, streaming/cancel-executing, streaming/cancel-pending, streaming/close-during-motion, streaming/close-outranks-cancel, streaming/connection-loss, streaming/deadlines, streaming/estop, streaming/grants, streaming/half-open-replaced, streaming/heartbeat, streaming/idempotency, streaming/isolation, streaming/lifecycle-complete, streaming/max-obs-rate, streaming/multi-bind, streaming/observer-session, streaming/one-session-per-connection, streaming/preempt-default, streaming/queue, streaming/replace, streaming/reset, streaming/resume-replay, streaming/session-open, streaming/stale-intent, streaming/stream-delivery, streaming/subscriptions, streaming/task, streaming/telemetry, streaming/transfer, streaming/transfer-offered, streaming/watchdog, streaming/window-expiry, streaming/ws-stream"
+      "detail": "40 check(s): streaming/admission-refusals, streaming/audit-log, streaming/cancel-executing, streaming/cancel-pending, streaming/close-during-motion, streaming/close-outranks-cancel, streaming/connection-loss, streaming/deadlines, streaming/estop, streaming/grants, streaming/half-open-replaced, streaming/heartbeat, streaming/idempotency, streaming/isolation, streaming/lifecycle-complete, streaming/max-obs-rate, streaming/multi-bind, streaming/observer-session, streaming/one-session-per-connection, streaming/preempt-default, streaming/queue, streaming/replace, streaming/reset, streaming/resume-replay, streaming/session-open, streaming/stale-intent, streaming/stream-delivery, streaming/subscriptions, streaming/task, streaming/telemetry, streaming/transfer, streaming/transfer-offered, streaming/watchdog, streaming/window-expiry, streaming/ws-stream"
     },
     {
       "id": "AWP-AGM-002",
@@ -268,7 +268,7 @@
       "id": "AWP-CLK-004",
       "level": "MUST",
       "outcome": "pass",
-      "detail": "39 check(s): streaming/admission-refusals, streaming/audit-log, streaming/cancel-executing, streaming/cancel-pending, streaming/close-during-motion, streaming/close-outranks-cancel, streaming/connection-loss, streaming/deadlines, streaming/estop, streaming/grants, streaming/half-open-replaced, streaming/heartbeat, streaming/idempotency, streaming/isolation, streaming/lifecycle-complete, streaming/max-obs-rate, streaming/multi-bind, streaming/observer-session, streaming/one-session-per-connection, streaming/preempt-default, streaming/queue, streaming/replace, streaming/reset, streaming/resume-replay, streaming/session-open, streaming/stale-intent, streaming/stream-delivery, streaming/subscriptions, streaming/task, streaming/telemetry, streaming/transfer, streaming/transfer-offered, streaming/watchdog, streaming/window-expiry, streaming/ws-stream"
+      "detail": "40 check(s): streaming/admission-refusals, streaming/audit-log, streaming/cancel-executing, streaming/cancel-pending, streaming/close-during-motion, streaming/close-outranks-cancel, streaming/connection-loss, streaming/deadlines, streaming/estop, streaming/grants, streaming/half-open-replaced, streaming/heartbeat, streaming/idempotency, streaming/isolation, streaming/lifecycle-complete, streaming/max-obs-rate, streaming/multi-bind, streaming/observer-session, streaming/one-session-per-connection, streaming/preempt-default, streaming/queue, streaming/replace, streaming/reset, streaming/resume-replay, streaming/session-open, streaming/stale-intent, streaming/stream-delivery, streaming/subscriptions, streaming/task, streaming/telemetry, streaming/transfer, streaming/transfer-offered, streaming/watchdog, streaming/window-expiry, streaming/ws-stream"
     },
     {
       "id": "AWP-CLK-005",
@@ -472,13 +472,13 @@
       "id": "AWP-DAT-004",
       "level": "MUST",
       "outcome": "pass",
-      "detail": "39 check(s): streaming/admission-refusals, streaming/audit-log, streaming/cancel-executing, streaming/cancel-pending, streaming/close-during-motion, streaming/close-outranks-cancel, streaming/connection-loss, streaming/deadlines, streaming/estop, streaming/grants, streaming/half-open-replaced, streaming/heartbeat, streaming/idempotency, streaming/isolation, streaming/lifecycle-complete, streaming/max-obs-rate, streaming/multi-bind, streaming/observer-session, streaming/one-session-per-connection, streaming/preempt-default, streaming/queue, streaming/replace, streaming/reset, streaming/resume-replay, streaming/session-open, streaming/stale-intent, streaming/stream-delivery, streaming/subscriptions, streaming/task, streaming/telemetry, streaming/transfer, streaming/transfer-offered, streaming/watchdog, streaming/window-expiry, streaming/ws-stream"
+      "detail": "40 check(s): streaming/admission-refusals, streaming/audit-log, streaming/cancel-executing, streaming/cancel-pending, streaming/close-during-motion, streaming/close-outranks-cancel, streaming/connection-loss, streaming/deadlines, streaming/estop, streaming/grants, streaming/half-open-replaced, streaming/heartbeat, streaming/idempotency, streaming/isolation, streaming/lifecycle-complete, streaming/max-obs-rate, streaming/multi-bind, streaming/observer-session, streaming/one-session-per-connection, streaming/preempt-default, streaming/queue, streaming/replace, streaming/reset, streaming/resume-replay, streaming/session-open, streaming/stale-intent, streaming/stream-delivery, streaming/subscriptions, streaming/task, streaming/telemetry, streaming/transfer, streaming/transfer-offered, streaming/watchdog, streaming/window-expiry, streaming/ws-stream"
     },
     {
       "id": "AWP-DAT-005",
       "level": "MUST",
       "outcome": "pass",
-      "detail": "39 check(s): streaming/admission-refusals, streaming/audit-log, streaming/cancel-executing, streaming/cancel-pending, streaming/close-during-motion, streaming/close-outranks-cancel, streaming/connection-loss, streaming/deadlines, streaming/estop, streaming/grants, streaming/half-open-replaced, streaming/heartbeat, streaming/idempotency, streaming/isolation, streaming/lifecycle-complete, streaming/max-obs-rate, streaming/multi-bind, streaming/observer-session, streaming/one-session-per-connection, streaming/preempt-default, streaming/queue, streaming/replace, streaming/reset, streaming/resume-replay, streaming/session-open, streaming/stale-intent, streaming/stream-delivery, streaming/subscriptions, streaming/task, streaming/telemetry, streaming/transfer, streaming/transfer-offered, streaming/watchdog, streaming/window-expiry, streaming/ws-stream"
+      "detail": "40 check(s): streaming/admission-refusals, streaming/audit-log, streaming/cancel-executing, streaming/cancel-pending, streaming/close-during-motion, streaming/close-outranks-cancel, streaming/connection-loss, streaming/deadlines, streaming/estop, streaming/grants, streaming/half-open-replaced, streaming/heartbeat, streaming/idempotency, streaming/isolation, streaming/lifecycle-complete, streaming/max-obs-rate, streaming/multi-bind, streaming/observer-session, streaming/one-session-per-connection, streaming/preempt-default, streaming/queue, streaming/replace, streaming/reset, streaming/resume-replay, streaming/session-open, streaming/stale-intent, streaming/stream-delivery, streaming/subscriptions, streaming/task, streaming/telemetry, streaming/transfer, streaming/transfer-offered, streaming/watchdog, streaming/window-expiry, streaming/ws-stream"
     },
     {
       "id": "AWP-DAT-006",
@@ -490,7 +490,7 @@
       "id": "AWP-DAT-007",
       "level": "MUST",
       "outcome": "pass",
-      "detail": "39 check(s): streaming/admission-refusals, streaming/audit-log, streaming/cancel-executing, streaming/cancel-pending, streaming/close-during-motion, streaming/close-outranks-cancel, streaming/connection-loss, streaming/deadlines, streaming/estop, streaming/grants, streaming/half-open-replaced, streaming/heartbeat, streaming/idempotency, streaming/isolation, streaming/lifecycle-complete, streaming/max-obs-rate, streaming/multi-bind, streaming/observer-session, streaming/one-session-per-connection, streaming/preempt-default, streaming/queue, streaming/replace, streaming/reset, streaming/resume-replay, streaming/session-open, streaming/stale-intent, streaming/stream-delivery, streaming/subscriptions, streaming/task, streaming/telemetry, streaming/transfer, streaming/transfer-offered, streaming/watchdog, streaming/window-expiry, streaming/ws-stream"
+      "detail": "40 check(s): streaming/admission-refusals, streaming/audit-log, streaming/cancel-executing, streaming/cancel-pending, streaming/close-during-motion, streaming/close-outranks-cancel, streaming/connection-loss, streaming/deadlines, streaming/estop, streaming/grants, streaming/half-open-replaced, streaming/heartbeat, streaming/idempotency, streaming/isolation, streaming/lifecycle-complete, streaming/max-obs-rate, streaming/multi-bind, streaming/observer-session, streaming/one-session-per-connection, streaming/preempt-default, streaming/queue, streaming/replace, streaming/reset, streaming/resume-replay, streaming/session-open, streaming/stale-intent, streaming/stream-delivery, streaming/subscriptions, streaming/task, streaming/telemetry, streaming/transfer, streaming/transfer-offered, streaming/watchdog, streaming/window-expiry, streaming/ws-stream"
     },
     {
       "id": "AWP-DAT-008",
@@ -592,13 +592,37 @@
       "id": "AWP-EVT-003",
       "level": "MUST",
       "outcome": "pass",
-      "detail": "39 check(s): streaming/admission-refusals, streaming/audit-log, streaming/cancel-executing, streaming/cancel-pending, streaming/close-during-motion, streaming/close-outranks-cancel, streaming/connection-loss, streaming/deadlines, streaming/estop, streaming/grants, streaming/half-open-replaced, streaming/heartbeat, streaming/idempotency, streaming/isolation, streaming/lifecycle-complete, streaming/max-obs-rate, streaming/multi-bind, streaming/observer-session, streaming/one-session-per-connection, streaming/preempt-default, streaming/queue, streaming/replace, streaming/reset, streaming/resume-replay, streaming/session-open, streaming/stale-intent, streaming/stream-delivery, streaming/subscriptions, streaming/task, streaming/telemetry, streaming/transfer, streaming/transfer-offered, streaming/watchdog, streaming/window-expiry, streaming/ws-stream"
+      "detail": "40 check(s): streaming/admission-refusals, streaming/audit-log, streaming/cancel-executing, streaming/cancel-pending, streaming/close-during-motion, streaming/close-outranks-cancel, streaming/connection-loss, streaming/deadlines, streaming/estop, streaming/grants, streaming/half-open-replaced, streaming/heartbeat, streaming/idempotency, streaming/isolation, streaming/lifecycle-complete, streaming/max-obs-rate, streaming/multi-bind, streaming/observer-session, streaming/one-session-per-connection, streaming/preempt-default, streaming/queue, streaming/replace, streaming/reset, streaming/resume-replay, streaming/session-open, streaming/stale-intent, streaming/stream-delivery, streaming/subscriptions, streaming/task, streaming/telemetry, streaming/transfer, streaming/transfer-offered, streaming/watchdog, streaming/window-expiry, streaming/ws-stream"
     },
     {
       "id": "AWP-EVT-004",
       "level": "MUST",
       "outcome": "pass",
       "detail": "5 check(s): streaming/estop, streaming/multi-bind, streaming/resume-replay, streaming/watchdog"
+    },
+    {
+      "id": "AWP-GAM-001",
+      "level": "MUST",
+      "outcome": "n/a",
+      "detail": "input_chunk declared: no"
+    },
+    {
+      "id": "AWP-GAM-002",
+      "level": "MUST",
+      "outcome": "n/a",
+      "detail": "input_chunk declared: no"
+    },
+    {
+      "id": "AWP-GAM-003",
+      "level": "MUST",
+      "outcome": "n/a",
+      "detail": "input_chunk declared: no"
+    },
+    {
+      "id": "AWP-GAM-004",
+      "level": "MUST",
+      "outcome": "n/a",
+      "detail": "input_chunk declared: no"
     },
     {
       "id": "AWP-GUI-001",
@@ -766,7 +790,7 @@
       "id": "AWP-MOD-001",
       "level": "MUST",
       "outcome": "pass",
-      "detail": "39 check(s): streaming/admission-refusals, streaming/audit-log, streaming/cancel-executing, streaming/cancel-pending, streaming/close-during-motion, streaming/close-outranks-cancel, streaming/connection-loss, streaming/deadlines, streaming/estop, streaming/grants, streaming/half-open-replaced, streaming/heartbeat, streaming/idempotency, streaming/isolation, streaming/lifecycle-complete, streaming/max-obs-rate, streaming/multi-bind, streaming/observer-session, streaming/one-session-per-connection, streaming/preempt-default, streaming/queue, streaming/replace, streaming/reset, streaming/resume-replay, streaming/session-open, streaming/stale-intent, streaming/stream-delivery, streaming/subscriptions, streaming/task, streaming/telemetry, streaming/transfer, streaming/transfer-offered, streaming/watchdog, streaming/window-expiry, streaming/ws-stream"
+      "detail": "40 check(s): streaming/admission-refusals, streaming/audit-log, streaming/cancel-executing, streaming/cancel-pending, streaming/close-during-motion, streaming/close-outranks-cancel, streaming/connection-loss, streaming/deadlines, streaming/estop, streaming/grants, streaming/half-open-replaced, streaming/heartbeat, streaming/idempotency, streaming/isolation, streaming/lifecycle-complete, streaming/max-obs-rate, streaming/multi-bind, streaming/observer-session, streaming/one-session-per-connection, streaming/preempt-default, streaming/queue, streaming/replace, streaming/reset, streaming/resume-replay, streaming/session-open, streaming/stale-intent, streaming/stream-delivery, streaming/subscriptions, streaming/task, streaming/telemetry, streaming/transfer, streaming/transfer-offered, streaming/watchdog, streaming/window-expiry, streaming/ws-stream"
     },
     {
       "id": "AWP-MOD-002",
@@ -808,7 +832,7 @@
       "id": "AWP-OBS-001",
       "level": "MUST",
       "outcome": "pass",
-      "detail": "39 check(s): streaming/admission-refusals, streaming/audit-log, streaming/cancel-executing, streaming/cancel-pending, streaming/close-during-motion, streaming/close-outranks-cancel, streaming/connection-loss, streaming/deadlines, streaming/estop, streaming/grants, streaming/half-open-replaced, streaming/heartbeat, streaming/idempotency, streaming/isolation, streaming/lifecycle-complete, streaming/max-obs-rate, streaming/multi-bind, streaming/observer-session, streaming/one-session-per-connection, streaming/preempt-default, streaming/queue, streaming/replace, streaming/reset, streaming/resume-replay, streaming/session-open, streaming/stale-intent, streaming/stream-delivery, streaming/subscriptions, streaming/task, streaming/telemetry, streaming/transfer, streaming/transfer-offered, streaming/watchdog, streaming/window-expiry, streaming/ws-stream"
+      "detail": "40 check(s): streaming/admission-refusals, streaming/audit-log, streaming/cancel-executing, streaming/cancel-pending, streaming/close-during-motion, streaming/close-outranks-cancel, streaming/connection-loss, streaming/deadlines, streaming/estop, streaming/grants, streaming/half-open-replaced, streaming/heartbeat, streaming/idempotency, streaming/isolation, streaming/lifecycle-complete, streaming/max-obs-rate, streaming/multi-bind, streaming/observer-session, streaming/one-session-per-connection, streaming/preempt-default, streaming/queue, streaming/replace, streaming/reset, streaming/resume-replay, streaming/session-open, streaming/stale-intent, streaming/stream-delivery, streaming/subscriptions, streaming/task, streaming/telemetry, streaming/transfer, streaming/transfer-offered, streaming/watchdog, streaming/window-expiry, streaming/ws-stream"
     },
     {
       "id": "AWP-OBS-002",
@@ -826,7 +850,7 @@
       "id": "AWP-OBS-004",
       "level": "MUST",
       "outcome": "pass",
-      "detail": "39 check(s): streaming/admission-refusals, streaming/audit-log, streaming/cancel-executing, streaming/cancel-pending, streaming/close-during-motion, streaming/close-outranks-cancel, streaming/connection-loss, streaming/deadlines, streaming/estop, streaming/grants, streaming/half-open-replaced, streaming/heartbeat, streaming/idempotency, streaming/isolation, streaming/lifecycle-complete, streaming/max-obs-rate, streaming/multi-bind, streaming/observer-session, streaming/one-session-per-connection, streaming/preempt-default, streaming/queue, streaming/replace, streaming/reset, streaming/resume-replay, streaming/session-open, streaming/stale-intent, streaming/stream-delivery, streaming/subscriptions, streaming/task, streaming/telemetry, streaming/transfer, streaming/transfer-offered, streaming/watchdog, streaming/window-expiry, streaming/ws-stream"
+      "detail": "40 check(s): streaming/admission-refusals, streaming/audit-log, streaming/cancel-executing, streaming/cancel-pending, streaming/close-during-motion, streaming/close-outranks-cancel, streaming/connection-loss, streaming/deadlines, streaming/estop, streaming/grants, streaming/half-open-replaced, streaming/heartbeat, streaming/idempotency, streaming/isolation, streaming/lifecycle-complete, streaming/max-obs-rate, streaming/multi-bind, streaming/observer-session, streaming/one-session-per-connection, streaming/preempt-default, streaming/queue, streaming/replace, streaming/reset, streaming/resume-replay, streaming/session-open, streaming/stale-intent, streaming/stream-delivery, streaming/subscriptions, streaming/task, streaming/telemetry, streaming/transfer, streaming/transfer-offered, streaming/watchdog, streaming/window-expiry, streaming/ws-stream"
     },
     {
       "id": "AWP-OBS-005",
@@ -838,7 +862,7 @@
       "id": "AWP-OBS-006",
       "level": "MUST",
       "outcome": "pass",
-      "detail": "39 check(s): streaming/admission-refusals, streaming/audit-log, streaming/cancel-executing, streaming/cancel-pending, streaming/close-during-motion, streaming/close-outranks-cancel, streaming/connection-loss, streaming/deadlines, streaming/estop, streaming/grants, streaming/half-open-replaced, streaming/heartbeat, streaming/idempotency, streaming/isolation, streaming/lifecycle-complete, streaming/max-obs-rate, streaming/multi-bind, streaming/observer-session, streaming/one-session-per-connection, streaming/preempt-default, streaming/queue, streaming/replace, streaming/reset, streaming/resume-replay, streaming/session-open, streaming/stale-intent, streaming/stream-delivery, streaming/subscriptions, streaming/task, streaming/telemetry, streaming/transfer, streaming/transfer-offered, streaming/watchdog, streaming/window-expiry, streaming/ws-stream"
+      "detail": "40 check(s): streaming/admission-refusals, streaming/audit-log, streaming/cancel-executing, streaming/cancel-pending, streaming/close-during-motion, streaming/close-outranks-cancel, streaming/connection-loss, streaming/deadlines, streaming/estop, streaming/grants, streaming/half-open-replaced, streaming/heartbeat, streaming/idempotency, streaming/isolation, streaming/lifecycle-complete, streaming/max-obs-rate, streaming/multi-bind, streaming/observer-session, streaming/one-session-per-connection, streaming/preempt-default, streaming/queue, streaming/replace, streaming/reset, streaming/resume-replay, streaming/session-open, streaming/stale-intent, streaming/stream-delivery, streaming/subscriptions, streaming/task, streaming/telemetry, streaming/transfer, streaming/transfer-offered, streaming/watchdog, streaming/window-expiry, streaming/ws-stream"
     },
     {
       "id": "AWP-OBS-007",
@@ -1624,6 +1648,10 @@
     {
       "test": "streaming/command-channel",
       "outcome": "skipped: capability command_channels not advertised"
+    },
+    {
+      "test": "streaming/input-chunk",
+      "outcome": "skipped: input_chunk not declared"
     },
     {
       "test": "streaming/reset",

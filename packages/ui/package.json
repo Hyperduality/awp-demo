@@ -32,7 +32,7 @@
   },
   "devDependencies": {
     "@awp-demo/tsconfig": "workspace:*",
-    "@hyperduality/awp": "0.1.0-alpha.4",
+    "@hyperduality/awp": "0.1.0-alpha.5",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "react": "^19.2.0",

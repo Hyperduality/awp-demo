@@ -60,7 +60,7 @@ An LLM controller for a world that waits takes one turn per message (`createLlmC
 
 ## Conformance
 
-Each world passes every assertion of awp-conformance 0.1.0a7 (0.1-draft.10) for Core World in its time model. The claim is "self-assessed against 0.1-draft.10": the suite leaves a few requirements untested, as listed in each report. Reports and fixtures are in `apps/<demo>/conformance/`.
+Each world passes every assertion of awp-conformance 0.1.0a9 (0.1-draft.11) for Core World in its time model. The claim is "self-assessed against 0.1-draft.11": the suite leaves a few requirements untested, as listed in each report. Reports and fixtures are in `apps/<demo>/conformance/`.
 
 ```bash
 pnpm --filter sorter world                       # in one shell
