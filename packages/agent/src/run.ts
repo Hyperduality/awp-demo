@@ -20,6 +20,8 @@ export interface AgentOptions {
   controllers: Controller<any>[];
   /** What to bind and subscribe to, given the world's manifest. */
   open(manifest: WorldManifest): OpenOptions & { mode?: TimeModel };
+  /** The time model to open in when the world offers both, until the UI picks another. */
+  timeModel?: TimeModel;
   clock?: { rateHz?: number; paused?: boolean };
   /**
    * `intent`: in streaming, the agent pings only while the controller in control shows life, so a
@@ -69,6 +71,7 @@ export async function runAgent(opts: AgentOptions): Promise<RunningAgent> {
       worldUrl: opts.worldUrl,
       sessionId: c?.ready?.session_id,
       mode: c?.mode,
+      timeModels: c?.manifest?.timeModels,
       tick: c?.mode === "lockstep" ? c.tick : undefined,
       rttMs: best ? best.rtt_ns / 1e6 : undefined,
       offsetMs: best ? best.offset_ns / 1e6 : undefined,
@@ -102,10 +105,22 @@ export async function runAgent(opts: AgentOptions): Promise<RunningAgent> {
     inspector.handle(AgentCommand.clockStep, () => m.step());
     inspector.handle(AgentCommand.clockRate, (a) => m.setRate(Number(arg(a).hz)));
     inspector.handle(AgentCommand.reconnect, () => current?.dropConnection?.());
+    inspector.handle(AgentCommand.mode, async (a) => {
+      const mode = arg(a).mode;
+      if (mode !== "lockstep" && mode !== "streaming") throw new Error(`no time model ${String(mode)}`);
+      if (!current?.manifest?.timeModels.includes(mode)) throw new Error(`the world does not offer ${mode}`);
+      timeModel = mode;
+      if (current.mode === mode) return;
+      switching = true;
+      await current.close().catch(() => undefined);
+    });
   }
 
   let stopped = false;
   let current: (AwpClient & { dropConnection?: () => void }) | undefined;
+  let timeModel = opts.timeModel;
+  /** The session is closing to reopen in another time model, so the next one opens at once. */
+  let switching = false;
   const statusTimer = setInterval(() => statusTopic?.set(snapshot()), 500);
 
   const loop = async () => {
@@ -128,7 +143,8 @@ export async function runAgent(opts: AgentOptions): Promise<RunningAgent> {
       try {
         const manifest = await client.initialize(10000);
         const { mode, ...open } = opts.open(manifest.raw);
-        await client.openSession(mode ?? manifest.timeModels[0]!, open);
+        const want = timeModel ?? mode;
+        await client.openSession(want && manifest.timeModels.includes(want) ? want : manifest.timeModels[0]!, open);
       } catch (e) {
         setConnection("error", e instanceof Error ? e.message : String(e));
         client.disconnect?.();
@@ -145,7 +161,8 @@ export async function runAgent(opts: AgentOptions): Promise<RunningAgent> {
       await client.whenClosed();
       m.detach();
       setConnection("closed", client.closeReason);
-      if (!stopped) await sleep(1000);
+      if (!stopped && !switching) await sleep(1000);
+      switching = false;
     }
   };
   void loop();

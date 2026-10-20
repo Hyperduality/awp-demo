@@ -128,6 +128,8 @@ export const AgentCommand = {
   clockStep: "clock.step",
   clockRate: "clock.rate",
   reconnect: "agent.reconnect",
+  /** Close the session and open the next in `{ mode }`, on a world offering both time models. */
+  mode: "session.mode",
 } as const;
 
 export type ControllerKind = "manual" | "program" | "llm";
@@ -187,6 +189,8 @@ export interface AgentStatus {
   worldUrl: string;
   sessionId?: string | undefined;
   mode?: string | undefined;
+  /** The time models the world offers; with both, the agent can switch. */
+  timeModels?: string[] | undefined;
   tick?: number | undefined;
   rttMs?: number | undefined;
   offsetMs?: number | undefined;
