@@ -1,15 +1,15 @@
 {
   "suite": {
     "name": "awp-conformance",
-    "version": "0.1.0a9"
+    "version": "0.1.0a10"
   },
-  "specification": "0.1-draft.11",
+  "specification": "0.1-draft.12",
   "target": "ws://127.0.0.1:8713",
   "side": "world",
-  "generated": "2026-10-20T01:48:20Z",
+  "generated": "2026-10-20T15:27:48Z",
   "claim": {
     "status": "self-assessed",
-    "wording": "Core World (lockstep), self-assessed against 0.1-draft.11; awp-conformance 0.1.0a9 passes every assertion it ran",
+    "wording": "Core World (lockstep), self-assessed against 0.1-draft.12; awp-conformance 0.1.0a10 passes every assertion it ran",
     "classes": ["Core World"],
     "modes": ["lockstep"],
     "failed": [],

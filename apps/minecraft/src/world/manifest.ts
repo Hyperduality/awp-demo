@@ -119,7 +119,8 @@ export const manifest = {
       preemption: ["replace", "queue"],
       concurrency_group: "input",
       max_queue: 1,
-      max_duration_ms: 2000,
+      // From submission: a chunk may wait out the one queued ahead of it, and a slow tick stretches its slots.
+      max_duration_ms: 5000,
     },
   ],
   safety_policy: {

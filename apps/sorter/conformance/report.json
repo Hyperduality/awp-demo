@@ -1,15 +1,15 @@
 {
   "suite": {
     "name": "awp-conformance",
-    "version": "0.1.0a9"
+    "version": "0.1.0a10"
   },
-  "specification": "0.1-draft.11",
+  "specification": "0.1-draft.12",
   "target": "ws://127.0.0.1:8712",
   "side": "world",
-  "generated": "2026-10-20T01:47:07Z",
+  "generated": "2026-10-20T15:26:36Z",
   "claim": {
     "status": "self-assessed",
-    "wording": "Core World (lockstep), self-assessed against 0.1-draft.11; awp-conformance 0.1.0a9 passes every assertion it ran",
+    "wording": "Core World (lockstep), self-assessed against 0.1-draft.12; awp-conformance 0.1.0a10 passes every assertion it ran",
     "classes": ["Core World"],
     "modes": ["lockstep"],
     "failed": [],
@@ -286,7 +286,7 @@
       "id": "AWP-CLK-007",
       "level": "MUST",
       "outcome": "pass",
-      "detail": "30 check(s): lockstep/audit-log, lockstep/connection-loss, lockstep/connection-without-session, lockstep/determinism, lockstep/embodiment-binding, lockstep/grants, lockstep/half-open-replaced, lockstep/heartbeat, lockstep/idempotency, lockstep/isolation, lockstep/lifecycle-complete, lockstep/lockstep-clock, lockstep/modalities, lockstep/multi-bind, lockstep/preempt-default, lockstep/queue, lockstep/replace, lockstep/reset, lockstep/resume-replay, lockstep/seeding, lockstep/session-open, lockstep/staging, lockstep/subscriptions, lockstep/tick-authority, lockstep/window-expiry"
+      "detail": "31 check(s): lockstep/audit-log, lockstep/close-during-motion, lockstep/connection-loss, lockstep/connection-without-session, lockstep/determinism, lockstep/embodiment-binding, lockstep/grants, lockstep/half-open-replaced, lockstep/heartbeat, lockstep/idempotency, lockstep/isolation, lockstep/lifecycle-complete, lockstep/lockstep-clock, lockstep/modalities, lockstep/multi-bind, lockstep/preempt-default, lockstep/queue, lockstep/replace, lockstep/reset, lockstep/resume-replay, lockstep/seeding, lockstep/session-open, lockstep/staging, lockstep/subscriptions, lockstep/tick-authority, lockstep/window-expiry"
     },
     {
       "id": "AWP-CLK-008",
@@ -1018,7 +1018,7 @@
       "id": "AWP-SAF-001",
       "level": "MUST",
       "outcome": "pass",
-      "detail": "28 check(s): lockstep/audit-log, lockstep/connection-loss, lockstep/determinism, lockstep/embodiment-binding, lockstep/grants, lockstep/half-open-replaced, lockstep/heartbeat, lockstep/idempotency, lockstep/isolation, lockstep/lifecycle-complete, lockstep/lockstep-clock, lockstep/modalities, lockstep/multi-bind, lockstep/preempt-default, lockstep/queue, lockstep/replace, lockstep/reset, lockstep/resume-replay, lockstep/seeding, lockstep/session-open, lockstep/staging, lockstep/subscriptions, lockstep/tick-authority, lockstep/window-expiry"
+      "detail": "29 check(s): lockstep/audit-log, lockstep/close-during-motion, lockstep/connection-loss, lockstep/determinism, lockstep/embodiment-binding, lockstep/grants, lockstep/half-open-replaced, lockstep/heartbeat, lockstep/idempotency, lockstep/isolation, lockstep/lifecycle-complete, lockstep/lockstep-clock, lockstep/modalities, lockstep/multi-bind, lockstep/preempt-default, lockstep/queue, lockstep/replace, lockstep/reset, lockstep/resume-replay, lockstep/seeding, lockstep/session-open, lockstep/staging, lockstep/subscriptions, lockstep/tick-authority, lockstep/window-expiry"
     },
     {
       "id": "AWP-SAF-002",

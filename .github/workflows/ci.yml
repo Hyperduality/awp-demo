@@ -54,7 +54,7 @@ jobs:
         working-directory: apps/${{ matrix.demo.name }}
         run: |
           export WORLD_PID=$(lsof -ti tcp:${{ matrix.demo.port }} -sTCP:LISTEN | head -1)
-          uvx --prerelease allow awp-conformance==0.1.0a9 world ws://127.0.0.1:${{ matrix.demo.port }} \
+          uvx --prerelease allow awp-conformance==0.1.0a10 world ws://127.0.0.1:${{ matrix.demo.port }} \
             --token "$AWP_TOKEN" --fixture conformance/fixture.json --out conformance/report ${{ matrix.demo.args }}
       - uses: actions/upload-artifact@v4
         if: always()

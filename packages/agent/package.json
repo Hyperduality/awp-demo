@@ -17,7 +17,7 @@
     "@ai-sdk/openai": "^4.0.78",
     "@ai-sdk/openai-compatible": "^3.0.0",
     "@awp-demo/inspector": "workspace:*",
-    "@hyperduality/awp": "0.1.0-alpha.5",
+    "@hyperduality/awp": "0.1.0-alpha.6",
     "ai": "^7.0.118",
     "zod": "^4.6.5"
   },
