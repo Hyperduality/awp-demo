@@ -113,7 +113,7 @@ export async function serveWorld<View>(def: WorldDefinition<View>, opts: ServeOp
     const message = o.frame ? host.stampSend(o.frame, o.message, monotonicNs()) : o.message;
     const text = JSON.stringify(message);
     ws.send(text);
-    tap(conn, "world", message, text.length);
+    tap(conn, "world", o.frame?.binary ? withoutPayload(message) : message, text.length);
   };
 
   const apply = (outputs: HostOutput[]) => {
@@ -242,6 +242,13 @@ export async function serveWorld<View>(def: WorldDefinition<View>, opts: ServeOp
       await inspector?.close();
     },
   };
+}
+
+/** The wire log keeps binary frames' size, not their payload, so a video channel cannot flood it. */
+function withoutPayload(message: Record<string, unknown>): Record<string, unknown> {
+  const params = message.params as Record<string, unknown>;
+  const { payload_b64, ...rest } = params;
+  return { ...message, params: { ...rest, payload_bytes: Math.floor((String(payload_b64).length * 3) / 4) } };
 }
 
 function authenticate(req: IncomingMessage, opts: ServeOptions): true | { status: number; message: string } {

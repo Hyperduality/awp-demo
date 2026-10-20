@@ -145,12 +145,18 @@ export class ControlMux {
     this.client = client;
     this.manifest = client.manifest?.raw;
     this.lastTickTs = undefined;
+    const binary = new Set(
+      (this.manifest?.observation_channels ?? []).filter((c) => !isJsonModality(c.modality)).map((c) => c.id),
+    );
     const onFrame = (name: string, frame: Parameters<typeof jsonPayload>[0]) => {
-      let payload: unknown;
-      try {
-        payload = jsonPayload(frame);
-      } catch {
-        return;
+      // A binary modality (image/jpeg, say) reaches controllers as its bytes.
+      let payload: unknown = frame.payload;
+      if (!binary.has(name)) {
+        try {
+          payload = jsonPayload(frame);
+        } catch {
+          return;
+        }
       }
       this.latestPayload.set(name, payload);
       if (client.mode === "lockstep" && typeof frame.ts_mono_ns === "number") {
@@ -791,3 +797,8 @@ const EVENT_TITLES: Record<string, string> = {
   entity_appeared: "Entity appeared",
   entity_removed: "Entity removed",
 };
+
+/** JSON modalities (`application/json`, `text/event+json`, …) decode to values; the rest stay bytes. */
+function isJsonModality(modality: string): boolean {
+  return /[/+]json$/.test(modality);
+}

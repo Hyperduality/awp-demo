@@ -22,18 +22,21 @@ afterEach(async () => {
 async function setup(
   mode: "lockstep" | "streaming",
   controllers: Controller<any>[],
-  opts: { handoff?: "cancel" | "inherit"; heartbeat?: "intent" } = {},
+  opts: { handoff?: "cancel" | "inherit"; heartbeat?: "intent"; camera?: boolean } = {},
 ) {
-  world = await serveWorld(gridworld(mode), { port: 0, token: TOKEN, log: () => {} });
+  world = await serveWorld(gridworld(mode, { camera: opts.camera }), { port: 0, token: TOKEN, log: () => {} });
   client = new AwpClient({
     url: world.url,
     token: TOKEN,
     agent: { name: "mux-test", version: "0", vendor: "awp-demo" },
-    consumesModalities: ["text/event+json"],
+    consumesModalities: opts.camera ? ["text/event+json", "image/jpeg"] : ["text/event+json"],
     ...(opts.heartbeat === "intent" ? { heartbeat: "manual" as const, obsReport: false } : {}),
   });
   await client.initialize();
-  await client.openSession(mode, { embodiment: "avatar_0", subscribe: ["grid_view"] });
+  await client.openSession(mode, {
+    embodiment: "avatar_0",
+    subscribe: opts.camera ? ["grid_view", "camera"] : ["grid_view"],
+  });
   const activity: ActivityEntry[] = [];
   mux = new ControlMux(
     controllers,
@@ -112,6 +115,26 @@ describe("control mux", () => {
     manualCtx!.release();
     await until(() => mux.authority === "program");
     expect(activity.some((e) => e.kind === "handoff" && e.title === "Program took control from Manual")).toBe(true);
+  });
+
+  it("gives controllers a binary channel as its bytes", async () => {
+    let ctxRef: ControlContext<{}> | undefined;
+    const watcher: Controller<{}> = {
+      id: "program",
+      kind: "program",
+      label: "Watcher",
+      description: "Reads the camera",
+      config: z.object({}),
+      create(ctx) {
+        ctxRef = ctx;
+        return {};
+      },
+    };
+    await setup("lockstep", [watcher], { camera: true });
+    await until(() => ctxRef?.latest("camera") !== undefined);
+    expect(ctxRef!.latest("camera")).toBeInstanceOf(Uint8Array);
+    expect([...ctxRef!.latest<Uint8Array>("camera")!]).toEqual([0, 0]);
+    expect(ctxRef!.latest("grid_view")).toEqual({ avatar: [0, 0], goal: [2, 0] });
   });
 
   it("refuses submissions from a controller that is not engaged", async () => {

@@ -23,9 +23,17 @@ export function ObservationPanel({ renderers = {} }: { renderers?: ChannelRender
     if (!current || !session) return undefined;
     for (let i = wire.length - 1; i >= 0; i--) {
       const e = wire[i]!;
-      const m = e.message as { method?: string; params?: { channel_id?: number; payload_b64?: string; seq?: number } };
+      const m = e.message as {
+        method?: string;
+        params?: { channel_id?: number; payload_b64?: string; payload_bytes?: number; seq?: number };
+      };
       if (e.session === session.id && m.method === "obs.frame" && m.params?.channel_id === current.channelId) {
-        return { payload: decodePayload(m.params.payload_b64), seq: m.params.seq };
+        // The wire log keeps only the size of a binary frame.
+        const payload =
+          m.params.payload_b64 === undefined
+            ? { modality: current.modality, bytes: m.params.payload_bytes }
+            : decodePayload(m.params.payload_b64);
+        return { payload, seq: m.params.seq };
       }
     }
     return undefined;

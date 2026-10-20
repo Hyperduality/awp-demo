@@ -1,12 +1,26 @@
 import { createHash, randomBytes } from "node:crypto";
+import type { BinaryPayload } from "./types.ts";
 
 /** Unpadded base64url, the recommended token alphabet (AWP-SEC-005). */
 export function mintToken(prefix: string, bytes = 18): string {
   return `${prefix}${randomBytes(bytes).toString("base64url")}`;
 }
 
-export function jsonPayloadB64(value: unknown): string {
-  return Buffer.from(JSON.stringify(value), "utf8").toString("base64");
+export function isBinaryPayload(value: unknown): value is BinaryPayload {
+  return typeof value === "object" && value !== null && (value as { bytes?: unknown }).bytes instanceof Uint8Array;
+}
+
+/** The bytes a frame carries: a binary payload as is, anything else as UTF-8 JSON. */
+export function payloadBytes(value: unknown): Uint8Array {
+  return isBinaryPayload(value) ? value.bytes : Buffer.from(JSON.stringify(value), "utf8");
+}
+
+export function toB64(bytes: Uint8Array): string {
+  return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString("base64");
+}
+
+export function fromB64(b64: string): Uint8Array {
+  return Buffer.from(b64, "base64");
 }
 
 export function decodeB64Json(b64: string): unknown {
@@ -30,8 +44,8 @@ export function jsonEqual(a: unknown, b: unknown): boolean {
   return ak.every((k) => Object.hasOwn(bo, k) && jsonEqual(ao[k], bo[k]));
 }
 
-export function sha256Hex(text: string): string {
-  return createHash("sha256").update(text).digest("hex");
+export function sha256Hex(data: string | Uint8Array): string {
+  return createHash("sha256").update(data).digest("hex");
 }
 
 const REDACT_KEYS = new Set(["session_token", "transfer_token", "snapshot_token"]);
