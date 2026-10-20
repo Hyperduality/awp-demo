@@ -132,7 +132,7 @@ export const AgentCommand = {
   mode: "session.mode",
 } as const;
 
-export type ControllerKind = "manual" | "program" | "llm";
+export type ControllerKind = "manual" | "program" | "llm" | "policy";
 
 export interface ControllerState {
   id: string;
