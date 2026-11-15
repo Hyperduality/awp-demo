@@ -1,0 +1,27 @@
+{
+  "name": "@awp-demo/physics",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./math": "./src/math.ts",
+    "./quant": "./src/quant.ts",
+    "./scene": "./src/scene.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@dimforge/rapier3d-deterministic-compat": "0.19.3"
+  },
+  "devDependencies": {
+    "@awp-demo/tsconfig": "workspace:*",
+    "@types/node": "^24.19.0",
+    "tsx": "^4.23.15",
+    "typescript": "~5.9.3",
+    "vitest": "^5.0.2"
+  },
+  "sideEffects": false
+}

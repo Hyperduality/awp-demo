@@ -15,7 +15,7 @@ import {
 import { AWP_SUBPROTOCOL } from "@hyperduality/awp";
 import { type WebSocket, WebSocketServer } from "ws";
 import { type HostOutput, WorldHost } from "./host.ts";
-import type { WorldDefinition } from "./types.ts";
+import type { Sim, WorldDefinition } from "./types.ts";
 import { monotonicNs, redact } from "./util.ts";
 
 export interface ServeOptions {
@@ -32,6 +32,8 @@ export interface ServeOptions {
   operatorSignals?: boolean;
   /** Sim frame rate of the UI view topic (default 30). */
   viewHz?: number;
+  /** Further inspector state topics read from the sim, for render data too heavy or too slow for the view. */
+  topics?: { name: string; hz: number; read(sim: Sim): unknown }[];
   log?: (line: string) => void;
 }
 
@@ -194,15 +196,31 @@ export async function serveWorld<View>(def: WorldDefinition<View>, opts: ServeOp
   // Inspector: manifest, sessions, render view, operator commands.
   let viewTimer: NodeJS.Timeout | undefined;
   let stateTimer: NodeJS.Timeout | undefined;
+  const extraTimers: NodeJS.Timeout[] = [];
   if (inspector) {
     inspector.state(WorldTopic.manifest, def.manifest);
     worldState = inspector.state<WorldState>(WorldTopic.world, { url, ...host.describe() }, { throttleMs: 50 });
     const layout = inspector.state(WorldTopic.layout, host.sim.staticView?.() ?? null);
     const view = inspector.state(WorldTopic.view, host.sim.view());
-    viewTimer = setInterval(() => view.set(host.sim.view()), 1000 / (opts.viewHz ?? 30));
+    const refreshLayout = () => layout.set(host.sim.staticView?.() ?? null);
+    // A reset or a seeded session makes a new sim, and its static view goes out before its first frame.
+    let shown: Sim = host.sim;
+    viewTimer = setInterval(
+      () => {
+        if (host.sim !== shown) {
+          shown = host.sim;
+          refreshLayout();
+        }
+        view.set(host.sim.view());
+      },
+      1000 / (opts.viewHz ?? 30),
+    );
+    for (const t of opts.topics ?? []) {
+      const topic = inspector.state(t.name, t.read(host.sim));
+      extraTimers.push(setInterval(() => topic.set(t.read(host.sim)), 1000 / t.hz));
+    }
     // Clocks and sequence numbers move without structural changes; refresh them a few times a second.
     stateTimer = setInterval(publishWorld, 250);
-    const refreshLayout = () => layout.set(host.sim.staticView?.() ?? null);
     inspector.handle(WorldCommand.reset, async (args) => {
       const a = (args ?? {}) as { initialState?: string; seed?: number };
       apply(await host.operatorReset(monotonicNs(), a));
@@ -246,6 +264,7 @@ export async function serveWorld<View>(def: WorldDefinition<View>, opts: ServeOp
       process.off("SIGUSR2", onUsr2);
       if (viewTimer) clearInterval(viewTimer);
       if (stateTimer) clearInterval(stateTimer);
+      for (const t of extraTimers) clearInterval(t);
       for (const ws of sockets.values()) ws.terminate();
       await new Promise<void>((resolve) => wss.close(() => resolve()));
       await inspector?.close();

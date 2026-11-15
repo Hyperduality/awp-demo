@@ -561,6 +561,12 @@ export interface SupervisorOptions<C extends LlmConfig> {
    * which it hears without being woken.
    */
   news?(channel: string, payload: unknown, previous: unknown): string[];
+  /**
+   * Wake the model when one of its own actions completes. Off by default, for worlds whose
+   * observations bring that news themselves (a call resolved, a score changed). Set it where the model
+   * works in steps, each waiting on the one before: pick this up, then put it there.
+   */
+  wakeOnCompletion?: boolean;
   /** Lines from a new frame the model should hear when it next wakes, but not wake for. */
   notes?(channel: string, payload: unknown, previous: unknown): string[];
   /** The first message when the operator puts the model on duty without one. */
@@ -585,7 +591,7 @@ export interface SupervisorOptions<C extends LlmConfig> {
  *
  * - Its action tools return once the world admits the action, so the model thinks while the world
  *   acts. How an action ends is news, told with the next tool result or in the next turn.
- * - News wakes it: actions ending (but its own completing), world events, operator messages, and
+ * - News wakes it: actions ending (its own completing only with `wakeOnCompletion`), world events, operator messages, and
  *   whatever `news` finds in new frames. A turn starts once the news settles, and the model ends it
  *   when nothing is left.
  * - Each submission names as its basis the frame of the view the model was looking at when the
@@ -626,6 +632,8 @@ export function createLlmSupervisor<C extends LlmConfig = LlmConfig>(opts: Super
         shown = v.basis;
         return `${VIEW_MARK}:\n${v.text}`;
       };
+      // Its own refusals it heard at once; its own completions wake it only where the world asks for that.
+      const quiet = opts.wakeOnCompletion ? ["rejected"] : ["completed", "rejected"];
       /** Everything the model has not heard yet; hearing it marks it told. */
       const catchUp = (): string[] => {
         const lines = [...notes.splice(0), ...news.splice(0), ...happenings(ctx, told)];
@@ -635,9 +643,7 @@ export function createLlmSupervisor<C extends LlmConfig = LlmConfig>(opts: Super
       const pending = () =>
         news.length > 0 ||
         (ctx.events(1)[0]?.seq ?? 0) > told ||
-        ctx
-          .history(50)
-          .some((h) => h.seq > told && !(h.source === ctx.id && ["completed", "rejected"].includes(h.state)));
+        ctx.history(50).some((h) => h.seq > told && !(h.source === ctx.id && quiet.includes(h.state)));
       const schedule = (delayMs = 300) => {
         if (!onDuty || turn || wake) return;
         wake = setTimeout(() => {

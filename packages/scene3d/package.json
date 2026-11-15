@@ -1,0 +1,25 @@
+{
+  "name": "@awp-demo/scene3d",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@awp-demo/physics": "workspace:*",
+    "three": "0.187.0"
+  },
+  "peerDependencies": {
+    "react": "^19.2.0"
+  },
+  "devDependencies": {
+    "@awp-demo/tsconfig": "workspace:*",
+    "@types/react": "^19.2.0",
+    "@types/three": "0.187.0",
+    "typescript": "~5.9.3"
+  }
+}

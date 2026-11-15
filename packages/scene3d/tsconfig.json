@@ -1,0 +1,7 @@
+{
+  "extends": "@awp-demo/tsconfig/react.json",
+  "compilerOptions": {
+    "types": []
+  },
+  "include": ["src"]
+}
