@@ -11,6 +11,7 @@
   "instant": { "type": "move", "params": { "direction": "north" } },
   "invalid": { "type": "move", "params": { "direction": "up" } },
   "initial_state": "default",
+  "approver_token": "conformance-approver-0123",
   "operator": { "estop_engage": "kill -USR1 $WORLD_PID", "estop_release": "kill -USR2 $WORLD_PID" },
   "audit_dir": "awp-audit"
 }

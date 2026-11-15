@@ -24,6 +24,8 @@ export function gridworld(
     slowCreateMs?: number;
     /** Add a binary `camera` channel whose payload is the avatar cell as two bytes, standing in for an image. */
     camera?: boolean;
+    /** Add `open_gate`, a type that needs approval, with this approval timeout. */
+    approvalTimeoutMs?: number;
   } = {},
 ): WorldDefinition<{ avatar: number[] }> {
   const lockstep = mode !== "streaming";
@@ -39,7 +41,7 @@ export function gridworld(
       {
         id: "avatar_0",
         kind: "avatar",
-        action_types: ["move", "walk_to"],
+        action_types: ["move", "walk_to", ...(opts.approvalTimeoutMs !== undefined ? ["open_gate"] : [])],
         channels: opts.camera ? ["grid_view", "camera"] : ["grid_view"],
       },
     ],
@@ -96,11 +98,24 @@ export function gridworld(
         concurrency_group: "locomotion",
         max_queue: 2,
       },
+      ...(opts.approvalTimeoutMs !== undefined
+        ? [
+            {
+              type: "open_gate",
+              params_schema: { type: "object", additionalProperties: false },
+              duration: "extended" as const,
+              preemption: ["queue" as const, "replace" as const],
+              concurrency_group: "gate",
+              requires_approval: true,
+            },
+          ]
+        : []),
     ],
     safety_policy: {
       envelopes: [],
       ...(streaming ? { safe_state: { behavior: "safe_stop", watchdog_ms: 1000 } } : {}),
       ...(opts.maxBasisAgeMs !== undefined ? { max_basis_age_ms: opts.maxBasisAgeMs } : {}),
+      ...(opts.approvalTimeoutMs !== undefined ? { approval_timeout_ms: opts.approvalTimeoutMs } : {}),
     },
   };
   return {
@@ -148,6 +163,16 @@ export function gridworld(
               avatar[0]! += dx;
               avatar[1]! += dy;
               return { done: true };
+            },
+          };
+        }
+        if (type === "open_gate") {
+          // The gate takes 100 ms, or two advances, to open.
+          let left = mode === "lockstep" ? 2 : 100;
+          return {
+            update(dt) {
+              left -= mode === "lockstep" ? 1 : dt;
+              return left <= 0 ? { done: true } : { progress: 0.5 };
             },
           };
         }

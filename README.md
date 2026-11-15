@@ -50,6 +50,7 @@ A world is a `WorldDefinition`: a manifest, plus a simulation that steps, observ
 - both time models
 - heartbeats, watchdogs and safe state
 - stale intents, refused on the age of their basis or past their validity
+- approval: an action of a type marked `requires_approval` waits for a decision from an approver connection
 - resume and replay
 - the audit log
 

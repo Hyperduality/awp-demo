@@ -121,6 +121,8 @@ const RETRYABLE = new Set<string>([
 
 interface Conn {
   id: number;
+  /** The deployment authorized this connection to decide approvals (AWP-APR-007). */
+  approver: boolean;
   initialized: boolean;
   consumes: Set<string>;
   maxObsRateHz: number | undefined;
@@ -154,6 +156,9 @@ interface Action {
   group: string;
   params: Json;
   submission: Json;
+  preempt: string;
+  /** The request an action that needs approval waits on, and when it lapses on the session clock. */
+  approval: { id: string; expiresNs: number } | undefined;
   order: number;
   state: ActionState;
   lastSeq: number;
@@ -244,9 +249,13 @@ export class WorldHost<View = unknown> {
   private readonly windowMs: number;
   private readonly watchdogMs: number | undefined;
   private readonly maxBasisAgeMs: number | undefined;
+  private readonly approvalTimeoutMs: number;
   private readonly conns = new Map<number, Conn>();
   private readonly sessions = new Map<string, Session>();
   private readonly byToken = new Map<string, Session>();
+  /** Undecided approvals by `approval_id`. */
+  private readonly approvals = new Map<string, { session: Session; action: Action }>();
+  private approvalCounter = 0;
   private readonly types = new Map<string, ActionSchemaDecl>();
   private readonly channels = new Map<string, ChannelDecl>();
   private readonly validators = new Map<string, ReturnType<typeof compileParamsSchema>>();
@@ -284,6 +293,9 @@ export class WorldHost<View = unknown> {
     this.windowMs = def.reconnectWindowMs ?? 30000;
     this.watchdogMs = def.manifest.safety_policy.safe_state?.watchdog_ms;
     this.maxBasisAgeMs = def.manifest.safety_policy.max_basis_age_ms;
+    this.approvalTimeoutMs = def.manifest.safety_policy.approval_timeout_ms ?? 60000;
+    if (def.manifest.safety_policy.standing_approvals === true)
+      throw new Error("standing approvals (AWP-APR-004) are not implemented");
     for (const a of def.manifest.action_schemas) {
       this.types.set(a.type, a);
       this.validators.set(a.type, compileParamsSchema(def.manifest, a));
@@ -330,8 +342,8 @@ export class WorldHost<View = unknown> {
   // ---------------------------------------------------------------------------------------------
   // Entry points. They run one at a time, in call order, so an async step never overlaps a message.
 
-  connect(conn: number, now: number): Promise<void> {
-    return this.serial(() => this.onConnect(conn, now));
+  connect(conn: number, now: number, opts: { approver?: boolean } = {}): Promise<void> {
+    return this.serial(() => this.onConnect(conn, now, opts.approver === true));
   }
 
   disconnect(conn: number, now: number): Promise<HostOutput[]> {
@@ -403,10 +415,11 @@ export class WorldHost<View = unknown> {
     return run;
   }
 
-  private onConnect(conn: number, now: number): void {
+  private onConnect(conn: number, now: number, approver: boolean): void {
     this.now = now;
     this.conns.set(conn, {
       id: conn,
+      approver,
       initialized: false,
       consumes: new Set(),
       maxObsRateHz: undefined,
@@ -656,6 +669,8 @@ export class WorldHost<View = unknown> {
     if (method === "world.manifest") return this.manifest;
     if (method === "session.open") return this.rpcOpen(c, p);
     if (method === "session.resume") return this.rpcResume(c, p);
+    // An approver needs no session (AWP-APR-007).
+    if (method === "safety.approval.respond") return this.rpcRespond(c, p, id);
     const s = c.session;
     if (!s || s.state === "closed") fail("AWP_SESSION_UNKNOWN", "no session on this connection");
     const schema = PARAMS_SCHEMA[method];
@@ -702,6 +717,7 @@ export class WorldHost<View = unknown> {
     if (method === "task.update") return this.manifest.capabilities?.task === true;
     if (method === "world.tick") return this.mode === "lockstep";
     if (method === "world.reset") return (this.manifest.initial_states?.length ?? 0) > 0;
+    if (method === "safety.approval.respond") return this.manifest.action_schemas.some((a) => a.requires_approval);
     return true;
   }
 
@@ -1026,13 +1042,17 @@ export class WorldHost<View = unknown> {
 
     const group = `${embodiment}/${schema.concurrency_group ?? "_"}`;
     const live = this.liveActions(s).filter((a) => a.group === group);
-    let initial: ActionState = "accepted";
+    const needsApproval = schema.requires_approval === true;
+    let initial: ActionState = needsApproval ? "pending_approval" : "accepted";
     if (preempt === "reject" && live.length > 0) fail("AWP_BUSY", `${group} is busy`, { retry_after_ms: 100 });
-    if (preempt === "queue" && live.length > 0) {
-      const queued = live.filter((a) => a.state === "queued").length;
-      if (queued >= (schema.max_queue ?? 1))
+    if (preempt === "queue" && live.some((a) => a.state !== "pending_approval")) {
+      // An action awaiting approval that chose the queue holds a place in it (AWP-PRE-002).
+      const waiting = live.filter(
+        (a) => a.state === "queued" || (a.state === "pending_approval" && a.preempt === "queue"),
+      ).length;
+      if (waiting >= (schema.max_queue ?? 1))
         fail("AWP_QUEUE_FULL", `the queue of ${group} is full`, { retry_after_ms: 100 });
-      initial = "queued";
+      if (!needsApproval) initial = "queued";
     }
 
     const a: Action = {
@@ -1043,6 +1063,8 @@ export class WorldHost<View = unknown> {
       group,
       params,
       submission,
+      preempt,
+      approval: undefined,
       order: ++s.actionOrder,
       state: "accepted",
       lastSeq: 0,
@@ -1066,15 +1088,8 @@ export class WorldHost<View = unknown> {
       const cap = receivedTs + schema.max_duration_ms * 1e6;
       a.deadlineNs = a.deadlineNs === undefined ? cap : Math.min(a.deadlineNs, cap);
     }
-    if (preempt === "replace") {
-      for (const other of live) {
-        if (other.state === "executing" || other.state === "cancelling") {
-          // In lockstep (AWP-PRE-007), and for device input at the next slot boundary (AWP-GAM-003).
-          if (this.mode === "streaming" && type !== INPUT_CHUNK) this.preempt(s, other);
-          else a.replaces = true;
-        } else this.finish(s, other, "cancelled", { reason: "superseded" });
-      }
-    }
+    // A replacement that needs approval replaces nothing until it is approved.
+    if (preempt === "replace" && !needsApproval) this.replace(s, a);
     s.actions.set(actionId, a);
     // A session's first activity can be this submission (streaming, nothing subscribed); it becomes
     // active first, so its `session.state` is sent in sequence before the admission's result.
@@ -1088,9 +1103,96 @@ export class WorldHost<View = unknown> {
     const result = this.submitResult(a);
     s.telemetry.admission.push(Math.max(0, this.clock(s) - receivedTs));
     this.result(s.conn!, this.currentId, "action.submit", result);
+    if (needsApproval) this.requestApproval(s, a);
     if (this.mode === "streaming") this.pump(s);
     this.hooks.changed?.();
     return undefined as unknown as Json;
+  }
+
+  /** A `replace` submission taking its group (AWP-PRE-003). */
+  private replace(s: Session, a: Action): void {
+    for (const other of this.liveActions(s)) {
+      if (other === a || other.group !== a.group) continue;
+      if (other.state === "executing" || other.state === "cancelling") {
+        // In lockstep (AWP-PRE-007), and for device input at the next slot boundary (AWP-GAM-003).
+        if (this.mode === "streaming" && a.type !== INPUT_CHUNK) this.preempt(s, other);
+        else a.replaces = true;
+      } else this.finish(s, other, "cancelled", { reason: "superseded" });
+    }
+  }
+
+  // ---------------------------------------------------------------------------------------------
+  // Approval
+
+  /** Tells the approver connections about an action that entered `pending_approval` (AWP-APR-001). */
+  private requestApproval(s: Session, a: Action): void {
+    const approval = {
+      id: `apr_${this.nonce}_${String(++this.approvalCounter).padStart(3, "0")}`,
+      expiresNs: a.lastTs + this.approvalTimeoutMs * 1e6,
+    };
+    a.approval = approval;
+    this.approvals.set(approval.id, { session: s, action: a });
+    const params: Json = {
+      approval_id: approval.id,
+      action_id: a.id,
+      type: a.type,
+      params: a.params,
+      requester: { session: s.id, embodiment: a.embodiment },
+      // The approver sees what the agent was asked to do (AWP-TSK-005).
+      ...(s.task !== undefined ? { task: s.task } : {}),
+      expires_at_ns: approval.expiresNs,
+    };
+    const message = { jsonrpc: "2.0", method: "safety.approval_requested", params };
+    if (this.validateOut) this.check("approval-requested", params, message);
+    // Requests and decisions travel on approver connections; the requesting session's log records them (AWP-AUD-001).
+    this.audit(s, "out", "control", message);
+    for (const c of this.conns.values())
+      if (c.approver && c.initialized) this.out.push({ kind: "send", conn: c.id, message });
+  }
+
+  private rpcRespond(c: Conn, p: Json, id: Id): Json {
+    if (!c.approver) fail("AWP_FORBIDDEN", "this connection is not an approver");
+    const problems = validate("approval-respond", p, "receiver");
+    if (problems.length > 0) throw new AwpFailure(JsonRpcCode.INVALID_PARAMS, "Invalid params", problems.join("; "));
+    const pending = this.approvals.get(p.approval_id as string);
+    // A deadline or timeout that has passed outranks the decision (AWP-LIF-008).
+    if (!pending || this.lapse(pending.session, pending.action))
+      fail("AWP_PARAMS_INVALID", `no undecided approval ${p.approval_id}`);
+    if (p.standing !== undefined) fail("AWP_PARAMS_INVALID", "this world grants no standing approvals"); // AWP-APR-004
+    const { session: s, action: a } = pending;
+    this.audit(s, "in", "control", { jsonrpc: "2.0", id, method: "safety.approval.respond", params: p });
+    if (p.decision === "deny") this.finish(s, a, "rejected", { reason: "approval_denied" });
+    else this.approve(s, a);
+    return {};
+  }
+
+  /** An approved action is checked again, then takes its group as its submission chose (AWP-APR-002). */
+  private approve(s: Session, a: Action): void {
+    const stale = this.staleness(this.clock(s), a.basisNs, a.validUntilNs);
+    if (stale) {
+      this.finish(s, a, "rejected", { reason: "stale_intent", detail: stale });
+      return;
+    }
+    const verdict = this.sim.admit?.(a.embodiment, a.type, a.params) ?? { ok: true };
+    if ("error" in verdict && verdict.error === "AWP_ENVELOPE_EXCEEDED") {
+      this.finish(s, a, "rejected", { reason: "envelope", detail: verdict.detail });
+      return;
+    }
+    if (a.preempt === "replace") this.replace(s, a);
+    const busy = this.liveActions(s).some((o) => o !== a && o.group === a.group && o.state !== "pending_approval");
+    this.transition(s, a, a.preempt === "queue" && busy ? "queued" : "accepted", {});
+    if (this.mode === "streaming") this.pump(s);
+  }
+
+  /** Ends a pending approval whose deadline or timeout has passed (AWP-APR-003). */
+  private lapse(s: Session, a: Action): boolean {
+    const now = this.clock(s);
+    // Deadlines bind in streaming only (AWP-ACT-004).
+    if (this.mode === "streaming" && a.deadlineNs !== undefined && now > a.deadlineNs)
+      this.finish(s, a, "rejected", { reason: "deadline_exceeded" });
+    else if (a.approval && now >= a.approval.expiresNs) this.finish(s, a, "rejected", { reason: "approval_timeout" });
+    else return false;
+    return true;
   }
 
   private submitResult(a: Action): Json {
@@ -1187,7 +1289,9 @@ export class WorldHost<View = unknown> {
   /** At the start of an advance: deferred aborts end, lockstep replacements take effect, staged actions begin. */
   private startStaged(s: Session): void {
     for (const a of this.liveActions(s)) {
-      if (a.state === "cancelling" && a.abortDoneNs === -1) {
+      // The approval timeout runs on simulated time (AWP-TIM-013).
+      if (a.state === "pending_approval") this.lapse(s, a);
+      else if (a.state === "cancelling" && a.abortDoneNs === -1) {
         this.finish(s, a, "cancelled", {
           reason: a.abortReason ?? "cancelled_by_agent",
           aborted_at_progress: round3(a.progress),
@@ -1212,7 +1316,7 @@ export class WorldHost<View = unknown> {
   private promoteQueued(s: Session): void {
     const groups = new Set([...s.actions.values()].filter((a) => a.state === "queued").map((a) => a.group));
     for (const group of groups) {
-      const inGroup = this.liveActions(s).filter((a) => a.group === group);
+      const inGroup = this.liveActions(s).filter((a) => a.group === group && a.state !== "pending_approval");
       if (inGroup.some((a) => a.state !== "queued")) continue;
       const next = inGroup.sort((x, y) => x.order - y.order)[0];
       if (next) this.transition(s, next, "accepted", {});
@@ -1273,6 +1377,10 @@ export class WorldHost<View = unknown> {
     if (s.state === "closed") return;
     const now = this.clock(s);
     for (const a of this.liveActions(s)) {
+      if (a.state === "pending_approval") {
+        this.lapse(s, a);
+        continue;
+      }
       if (a.state === "cancelling" && a.abortDoneNs !== undefined && now >= a.abortDoneNs) {
         this.finish(s, a, "cancelled", {
           reason: a.abortReason ?? "cancelled_by_agent",
@@ -1543,6 +1651,7 @@ export class WorldHost<View = unknown> {
     const from = a.state;
     if (!transition(from, to)) throw new Error(`illegal transition ${from} → ${to} for ${a.id}`);
     a.state = to;
+    if (from === "pending_approval" && a.approval) this.approvals.delete(a.approval.id);
     a.lastTs = this.clock(s);
     a.lastReason = typeof extra.reason === "string" ? extra.reason : undefined;
     if (isTerminal(to)) a.run = undefined;
@@ -2029,6 +2138,7 @@ const KNOWN_METHODS = new Set([
   "world.tick",
   "world.reset",
   "task.update",
+  "safety.approval.respond",
 ]);
 
 const PARAMS_SCHEMA: Record<string, string> = {
@@ -2057,6 +2167,7 @@ const RESULT_SCHEMA: Record<string, string> = {
   "world.tick": "tick-result",
   "world.reset": "reset-result",
   "task.update": "empty-result",
+  "safety.approval.respond": "empty-result",
 };
 
 const NOTIFICATION_SCHEMA: Record<string, string> = {
