@@ -31,11 +31,9 @@ jobs:
           - { name: sorter, port: 8712 }
           - { name: vault, port: 8713 }
           - { name: dispatch, port: 8714 }
-          - { name: minecraft, port: 8715, args: "--profile game" }
+          - { name: yard, port: 8717 }
     env:
       AWP_TOKEN: ci-conformance-token
-      # CI has no GPU or game: the Minecraft world runs on its fake engine here.
-      AWP_MINECRAFT_SIM: fake
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

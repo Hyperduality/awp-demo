@@ -1,0 +1,22 @@
+{
+  "embodiment": "forklift_0",
+  "subscribe": ["proprio", "scene", "task", "awp.tf", "depth", "rgb", "lidar"],
+  "moves": [
+    { "type": "drive_to", "params": { "x_m": 8, "y_m": -6 } },
+    { "type": "drive_to", "params": { "x_m": 3, "y_m": -9 } },
+    { "type": "drive_to", "params": { "x_m": 5, "y_m": -3 } }
+  ],
+  "extended_min_ms": 1500,
+  "long_params": { "max_velocity_mps": 0.05 },
+  "instant": { "type": "stop", "params": {} },
+  "invalid": { "type": "drive_to", "params": { "x_m": "left", "y_m": 0 } },
+  "outside_envelope": { "type": "drive_to", "params": { "x_m": 40, "y_m": 0 } },
+  "initial_state": "empty",
+  "operator": { "estop_engage": "kill -USR1 $WORLD_PID", "estop_release": "kill -USR2 $WORLD_PID" },
+  "audit_dir": "conformance/audit",
+  "servo": {
+    "action": { "type": "teleop", "params": {} },
+    "setpoint": { "v_mps": 0.5, "steer_rad": 0 },
+    "violation": { "v_mps": 9, "steer_rad": 0 }
+  }
+}

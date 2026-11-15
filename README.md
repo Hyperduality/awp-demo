@@ -11,9 +11,10 @@ Runnable demos of the [Agent World Protocol](https://www.agentworldprotocol.com)
 | **Sorter** | lockstep | program | A two-link arm and a gripper bound together (multi-bind), queue and replace preemption, a program that intercepts parcels on a conveyor |
 | **Vault** | lockstep | LLM | A language model exploring a dark vault through world actions, with the world held still while it thinks |
 | **Dispatch** | streaming | LLM | A language model running a city's emergency dispatch while the city keeps moving: actions that return on admission, decisions refused once the view behind them is too old (stale intent), and a watchdog held off only while the model is producing |
-| **Minecraft** | both | manual | Minecraft through device input (`input_chunk`: keys and mouse in 50 ms slots), switchable between lockstep and streaming. You, OpenAI's VPT, a vision model and a script take turns; VPT's decisions are refused once they arrive more than 150 ms after their frame. Needs a GPU and Linux or WSL2; see [its README](apps/minecraft/README.md) |
 
-Every demo has all three kinds of controller; Minecraft adds a fourth, a learned policy. Only one holds control at a time: the highest-priority controller that wants it. Manual outranks LLM, which outranks policy, which outranks program. When control changes hands, the agent cancels what the previous holder was doing; in Dispatch the new holder inherits the units already on their way instead. The world therefore sees one coherent session, and the UI shows one continuous stream of events.
+| **Yard** | streaming | manual | A freight yard as rigid bodies in 3D, and a forklift driven two ways: pallet skills as actions, and speed and steering as setpoints on a command channel (`servo/json`). The agent knows only a site map and what the truck's camera and lidar have picked out, so a language model has to go and look for the pallets it is asked to move. Depth, camera and lidar frames are rays cast through the physics. See [its README](apps/yard/README.md) |
+
+Sorter, Vault and Dispatch have all three kinds of controller; Yard has no program, since finding things is its task. Only one holds control at a time: the highest-priority controller that wants it. Manual outranks LLM, which outranks program. When control changes hands, the agent cancels what the previous holder was doing; in Dispatch the new holder inherits the units already on their way instead. The world therefore sees one coherent session, and the UI shows one continuous stream of events.
 
 ## Running
 
@@ -24,7 +25,7 @@ pnpm install
 pnpm sorter    # world :8712, UI http://localhost:5172
 pnpm vault     # world :8713, UI http://localhost:5173
 pnpm dispatch  # world :8714, UI http://localhost:5174
-pnpm minecraft # world :8715, UI http://localhost:5175 (setup in apps/minecraft/README.md)
+pnpm yard      # world :8717, UI http://localhost:5176
 ```
 
 `pnpm dev` runs every demo at once. Copy `.env.example` to `.env` to change the bearer token or to give the LLM controllers keys from the environment. A key entered in the UI is held in the agent process's memory only.
@@ -38,6 +39,8 @@ apps/<demo>/src/ui       the UI: world view and panel layout
 packages/world           WorldHost, a sans-IO AWP world written from the spec, and serveWorld
 packages/agent           the control mux, the Controller API, and LLM plumbing (AI SDK), including a supervisor for streaming worlds
 packages/inspector       the contract between the processes and the UI, over WebSocket
+packages/physics         rigid-body worlds for the world process: Rapier, a raycast vehicle, and raycast depth, camera and lidar
+packages/scene3d         a three.js view of such a world, drawn from the poses the world publishes
 packages/ui              the shell: a fixed grid of the Wire, Activity, Control, Session panels (and Timing, for streaming), with Agent View and About as dialogs
 ```
 
@@ -62,7 +65,7 @@ An LLM controller for a world that waits takes one turn per message (`createLlmC
 
 ## Conformance
 
-Each world passes every assertion that awp-conformance 0.1.0a10 (0.1-draft.12) runs against it. Sorter, Vault and Dispatch claim Core World in their time model; Minecraft claims Core World and the game profile in both, run against the real game (CI runs it on its fake engine). Each claim is "self-assessed against 0.1-draft.12": the suite leaves a few requirements untested, as listed in each report. Reports and fixtures are in `apps/<demo>/conformance/`, and Minecraft's device-input evidence for AWP-GAM-002..004 is in `apps/minecraft/conformance/evidence/`.
+Each world passes every assertion that awp-conformance 0.1.0a10 (0.1-draft.12) runs against it. Sorter, Vault, Dispatch and Yard claim Core World in their time model. Each claim is "self-assessed against 0.1-draft.12": the suite leaves a few requirements untested, as listed in each report. Reports and fixtures are in `apps/<demo>/conformance/`.
 
 ```bash
 pnpm --filter sorter world                       # in one shell

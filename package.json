@@ -11,7 +11,7 @@
     "sorter": "turbo run dev:world dev:agent dev:ui --filter=sorter",
     "vault": "turbo run dev:world dev:agent dev:ui --filter=vault",
     "dispatch": "turbo run dev:world dev:agent dev:ui --filter=dispatch",
-    "minecraft": "turbo run dev:world dev:agent dev:ui --filter=minecraft",
+    "yard": "turbo run dev:world dev:agent dev:ui --filter=yard",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
