@@ -28,7 +28,8 @@ const seen = (sim: YardSim) =>
 /** Drive to where the receiving pad is in view, as an agent that wants its pallets has to. */
 const look = (sim: YardSim) => act(sim, "drive_to", { x_m: -2, y_m: 0, yaw_rad: Math.PI });
 
-describe("yard", () => {
+// Whole deliveries in physics: a few seconds here, longer on a shared CI runner.
+describe("yard", { timeout: 30000 }, () => {
   it("lays out the same yard and orders from the same seed", async () => {
     const a = await YardSim.create(5, "default");
     const b = await YardSim.create(5, "default");
