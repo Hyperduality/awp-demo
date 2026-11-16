@@ -24,6 +24,8 @@ export interface ServeOptions {
   /** Bearer credential agents must present (AWP-SEC-005). Required unless `allowAnonymous`. */
   token?: string;
   allowAnonymous?: boolean;
+  /** Bearer credential of approver connections (AWP-APR-007). Without one, nothing can be approved. */
+  approverToken?: string;
   /** Inspector port for the UI; omit to run without one. */
   inspectorPort?: number;
   /** Directory for the JSONL audit log (AWP-AUD-001); omit to keep none. */
@@ -87,7 +89,7 @@ export async function serveWorld<View>(def: WorldDefinition<View>, opts: ServeOp
     handleProtocols: (protocols) => (protocols.has(AWP_SUBPROTOCOL) ? AWP_SUBPROTOCOL : false),
     verifyClient: (info, done) => {
       const verdict = authenticate(info.req, opts);
-      if (verdict === true) done(true);
+      if (typeof verdict === "string") done(true);
       else done(false, verdict.status, verdict.message);
     },
   });
@@ -145,10 +147,10 @@ export async function serveWorld<View>(def: WorldDefinition<View>, opts: ServeOp
     }
   };
 
-  wss.on("connection", (ws) => {
+  wss.on("connection", (ws, req) => {
     const id = ++connCounter;
     sockets.set(id, ws);
-    host.connect(id, monotonicNs()).catch(fault);
+    host.connect(id, monotonicNs(), { approver: authenticate(req, opts) === "approver" }).catch(fault);
     ws.on("message", (data, isBinary) => {
       if (isBinary) {
         ws.close(1002, "AWP_MALFORMED");
@@ -279,17 +281,20 @@ function withoutPayload(message: Record<string, unknown>): Record<string, unknow
   return { ...message, params: { ...rest, payload_bytes: Math.floor((String(payload_b64).length * 3) / 4) } };
 }
 
-function authenticate(req: IncomingMessage, opts: ServeOptions): true | { status: number; message: string } {
+function authenticate(
+  req: IncomingMessage,
+  opts: ServeOptions,
+): "agent" | "approver" | { status: number; message: string } {
   const url = req.url ?? "/";
   // Credentials never travel in URLs (AWP-SEC-006).
   if (/[?&](token|access_token|auth)=/i.test(url))
     return { status: 400, message: "credentials must not appear in the URL" };
-  if (opts.allowAnonymous || !opts.token) return true;
-  const header = req.headers.authorization;
-  if (header === `Bearer ${opts.token}`) return true;
   const offered = String(req.headers["sec-websocket-protocol"] ?? "")
     .split(",")
     .map((p) => p.trim());
-  if (offered.includes(`awp.bearer.${opts.token}`)) return true;
+  const presents = (token: string | undefined) =>
+    token !== undefined && (req.headers.authorization === `Bearer ${token}` || offered.includes(`awp.bearer.${token}`));
+  if (presents(opts.approverToken)) return "approver";
+  if (opts.allowAnonymous || !opts.token || presents(opts.token)) return "agent";
   return { status: 401, message: "a bearer credential is required" };
 }
